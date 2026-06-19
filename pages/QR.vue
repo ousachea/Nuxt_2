@@ -8,51 +8,143 @@
         </div>
       </div>
 
-      <div class="tab-navigation">
-        <button @click="activeTab = 'decode'" :class="['tab-button', { active: activeTab === 'decode' }]">
-          <span class="tab-icon">🔍</span>
-          <span class="tab-text">Decode</span>
-        </button>
-        <button @click="activeTab = 'generate'" :class="['tab-button', { active: activeTab === 'generate' }]">
-          <span class="tab-icon">✨</span>
-          <span class="tab-text">Generate</span>
-        </button>
-        <button @click="activeTab = 'reference'" :class="['tab-button', { active: activeTab === 'reference' }]">
-          <span class="tab-icon">📚</span>
-          <span class="tab-text">Reference</span>
-        </button>
-      </div>
 
-      <!-- Decode Tab -->
-      <div v-show="activeTab === 'decode'" class="tab-content">
-        <div class="input-area">
-          <div class="sample-selector">
-            <label class="sample-label">📋 Sample Data:</label>
-            <select @change="loadSampleData" class="sample-select">
-              <option value="">-- Select Sample --</option>
-              <option v-for="sample in sampleDataOptions" :key="sample.name" :value="sample.data">
-                {{ sample.name }}
-              </option>
-            </select>
+      <!-- KHQR Builder -->
+      <div class="tab-content">
+        <div class="builder-layout">
+
+          <!-- Left Panel -->
+          <div class="builder-left">
+            <div class="mode-tabs">
+              <button :class="['mode-tab', { active: activeMode === 'build' }]" @click="activeMode = 'build'">✨ Build</button>
+              <button :class="['mode-tab', { active: activeMode === 'paste' }]" @click="activeMode = 'paste'">📋 Paste</button>
+            </div>
+
+            <!-- Build mode: structured form -->
+            <div v-if="activeMode === 'build'" class="build-mode">
+              <div class="gen-toggles">
+                <div class="gen-toggle-group">
+                  <span class="gen-toggle-label">QR Type</span>
+                  <div class="seg-ctrl">
+                    <button :class="['seg-btn', { active: genType === 'static' }]" @click="genType = 'static'">Static</button>
+                    <button :class="['seg-btn', { active: genType === 'dynamic' }]" @click="genType = 'dynamic'">Dynamic</button>
+                  </div>
+                </div>
+                <div class="gen-toggle-group">
+                  <span class="gen-toggle-label">Account</span>
+                  <div class="seg-ctrl">
+                    <button :class="['seg-btn', { active: genMerchantType === 'merchant' }]" @click="genMerchantType = 'merchant'">Business</button>
+                    <button :class="['seg-btn', { active: genMerchantType === 'remittance' }]" @click="genMerchantType = 'remittance'">Personal</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="gen-fields">
+                <div class="gen-field">
+                  <label>Bakong ID</label>
+                  <input v-model="genBakongID" class="gen-input" placeholder="e.g., abaakhppxxx@abaa" />
+                </div>
+                <div class="gen-field">
+                  <label>Merchant / Account ID</label>
+                  <input v-model="genMerchantID" class="gen-input" placeholder="e.g., 121120911090971" />
+                </div>
+                <div class="gen-field">
+                  <label>Bank</label>
+                  <select v-model="genBankName" class="gen-input">
+                    <option value="">-- Select Bank --</option>
+                    <option v-for="bank in cambodianBanks" :key="bank" :value="bank">{{ bank }}</option>
+                  </select>
+                </div>
+                <div class="gen-field" v-if="genMerchantType === 'merchant'">
+                  <label>Category (MCC)</label>
+                  <input v-model="genMCCSearch" class="gen-input" placeholder="Search MCC..." />
+                  <select v-model="genMCC" class="gen-input gen-input-mt">
+                    <option value="">-- Select Category --</option>
+                    <option v-for="(desc, code) in filteredGenMCC" :key="code" :value="code">{{ code }} – {{ desc }}</option>
+                  </select>
+                  <span v-if="genMCC" class="gen-hint">{{ genMCC }} – {{ merchantCategoryMap[genMCC] }}</span>
+                </div>
+                <div class="gen-field">
+                  <label>Currency</label>
+                  <div class="seg-ctrl">
+                    <button :class="['seg-btn', { active: genCurrency === 'KHR' }]" @click="genCurrency = 'KHR'">KHR</button>
+                    <button :class="['seg-btn', { active: genCurrency === 'USD' }]" @click="genCurrency = 'USD'">USD</button>
+                  </div>
+                </div>
+                <div class="gen-field" v-if="genType === 'dynamic'">
+                  <label>Amount</label>
+                  <input v-model="genAmount" class="gen-input" placeholder="e.g., 10.00"
+                    @input="genAmount = genAmount.replace(/[^0-9.]/g, '')" />
+                </div>
+                <div class="gen-field">
+                  <label>Merchant Name <span class="gen-maxlen">(max 25)</span></label>
+                  <input v-model="genName" class="gen-input" placeholder="e.g., Ousa Chea" maxlength="25" />
+                </div>
+                <div class="gen-field">
+                  <label>City <span class="gen-maxlen">(max 15)</span></label>
+                  <input v-model="genCity" class="gen-input" placeholder="e.g., Phnom Penh" maxlength="15" />
+                </div>
+              </div>
+
+              <div v-if="genQRString" class="gen-clear">
+                <button @click="clearAll" class="btn btn-secondary">Clear</button>
+              </div>
+            </div>
+
+            <!-- Paste mode: raw input -->
+            <div v-else class="paste-mode">
+              <div class="sample-selector">
+                <label class="sample-label">📋 Sample:</label>
+                <select @change="loadSampleData" class="sample-select">
+                  <option value="">-- Select Sample --</option>
+                  <option v-for="sample in sampleDataOptions" :key="sample.name" :value="sample.data">
+                    {{ sample.name }}
+                  </option>
+                </select>
+              </div>
+              <textarea v-model="manualQRInput" @paste="handlePaste"
+                placeholder="Paste KHQR string here..." class="input-field"></textarea>
+              <div class="action-buttons">
+                <button @click="pasteFromClipboard" class="btn btn-primary paste-btn">📋 Paste</button>
+                <button @click="clearAll" class="btn btn-secondary">Clear</button>
+              </div>
+            </div>
           </div>
 
-          <textarea v-model="manualQRInput" @paste="handlePaste" placeholder="Paste QR code data..."
-            class="input-field"></textarea>
+          <!-- Right Panel -->
+          <div class="builder-right">
 
-          <div class="action-buttons">
-            <button @click="pasteFromClipboard" class="btn btn-primary paste-btn">
-              📋 Paste from Clipboard
-            </button>
-            <button @click="clearData" class="btn btn-secondary">
-              Clear
-            </button>
-          </div>
-        </div>
-      </div>
+            <!-- QR Preview -->
+            <div v-if="generatedQRImage" class="qr-output-section">
+              <div class="qr-preview-box">
+                <img :src="generatedQRImage" alt="QR Code" class="qr-preview-img" />
+              </div>
+              <div class="gen-dl">
+                <select v-model="downloadFormat" class="gen-dl-select">
+                  <option value="png">PNG</option>
+                  <option value="svg">SVG</option>
+                  <option value="jpg">JPG</option>
+                </select>
+                <button @click="downloadQRCode" class="btn btn-primary">Download</button>
+              </div>
+            </div>
+            <div v-else class="qr-placeholder">
+              <div class="qr-placeholder-icon">⬜</div>
+              <p>Build or paste a KHQR to preview</p>
+            </div>
 
-      <!-- Results - TLV Tree Structure -->
-      <div v-if="qrResult && activeTab === 'decode'" class="result-section">
-        <!-- MCC Warning Alert -->
+            <!-- Raw KHQR String -->
+            <div v-if="qrResult" class="gen-raw">
+              <div class="gen-raw-header">
+                <span>KHQR String</span>
+                <button @click="copyToClipboard" class="gen-copy-btn">{{ copyText }}</button>
+              </div>
+              <pre class="gen-raw-content">{{ qrResult }}</pre>
+            </div>
+
+            <!-- Decode Output -->
+            <div v-if="qrResult" class="result-section">
+              <!-- MCC Warning Alert -->
         <div v-if="!headerInfo.merchantCategoryTag" class="mcc-warning-alert">
           <span class="mcc-warning-icon">⚠️</span>
           <div class="mcc-warning-content">
@@ -106,116 +198,11 @@
         <div class="result-header">
           <h2>TLV Structure</h2>
           <div class="header-buttons">
+            <button v-if="editMode" @click="applyInlineEdits" class="copy-btn edit-apply-btn">✓ Apply</button>
             <button @click="toggleEditMode" class="copy-btn" :class="{ 'edit-active': editMode }">
-              {{ editMode ? '❌ Cancel' : '✏️ Edit' }}
+              {{ editMode ? '✕ Cancel' : '✏️ Edit' }}
             </button>
-            <button @click="copyToClipboard" class="copy-btn">
-              📋 {{ copyText }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Edit Panel -->
-        <div class="edit-panel" v-if="editMode">
-          <div class="edit-panel-header">
-            <h3>Edit KHQR Data</h3>
-            <span class="edit-info">Modify fields and update checksum</span>
-          </div>
-
-          <div class="edit-form-section">
-            <div class="edit-field">
-              <label>Merchant ID:</label>
-              <input v-model="editMerchantID" type="text" class="edit-input" placeholder="e.g., MERCHANT123"
-                maxlength="50">
-              <span v-if="editMerchantID" class="edit-field-hint">{{ editMerchantID.length }} chars</span>
-            </div>
-
-            <div class="edit-field">
-              <label>Currency:</label>
-              <select v-model="editCurrency" class="edit-select">
-                <option value="KHR">KHR (Cambodian Riel)</option>
-                <option value="USD">USD (US Dollar)</option>
-              </select>
-            </div>
-
-            <div class="edit-field">
-              <label>Amount:</label>
-              <input v-model="editAmount" type="text" class="edit-input" placeholder="e.g., 100.50"
-                @input="validateAmount">
-              <span v-if="editAmount && !isValidAmount()" class="edit-field-error">⚠️ Invalid amount format</span>
-              <span v-else-if="editAmount" class="edit-field-hint">Valid amount</span>
-            </div>
-
-            <div class="edit-field">
-              <label>Merchant Name:</label>
-              <input v-model="editMerchantName" type="text" class="edit-input" placeholder="e.g., My Business"
-                maxlength="50">
-              <span v-if="editMerchantName" class="edit-field-hint">{{ editMerchantName.length }} chars</span>
-            </div>
-
-            <div class="edit-field">
-              <label>Merchant City:</label>
-              <input v-model="editMerchantCity" type="text" class="edit-input" placeholder="e.g., Phnom Penh"
-                maxlength="50">
-              <span v-if="editMerchantCity" class="edit-field-hint">{{ editMerchantCity.length }} chars</span>
-            </div>
-
-            <div class="edit-field">
-              <label>Bank Name:</label>
-              <select v-model="editBankName" class="edit-select">
-                <option value="">-- Select Bank --</option>
-                <option v-for="bank in cambodianBanks" :key="bank" :value="bank">{{ bank }}</option>
-              </select>
-            </div>
-
-            <div class="edit-field">
-              <label>Merchant Category Code (MCC):</label>
-              <div class="mcc-selection">
-                <input v-model="mccSearchInput" type="text" class="edit-input"
-                  placeholder="Search MCC code or description...">
-                <select v-model="editMCC" class="edit-select">
-                  <option value="">-- Select Category --</option>
-                  <option v-for="(desc, code) in filteredMCCForEdit" :key="code" :value="code">
-                    {{ code }} - {{ desc }}
-                  </option>
-                </select>
-              </div>
-              <span v-if="editMCC" class="edit-field-hint">
-                Selected: {{ editMCC }} - {{ merchantCategoryMap[editMCC] }}
-              </span>
-            </div>
-          </div>
-
-          <div class="edit-validation-summary">
-            <div class="validation-item" :class="{ 'valid': editMerchantID, 'invalid': !editMerchantID }">
-              <span class="validation-icon">{{ editMerchantID ? '✓' : '○' }}</span>
-              <span>Merchant ID</span>
-            </div>
-            <div class="validation-item"
-              :class="{ 'valid': editAmount && isValidAmount(), 'invalid': editAmount && !isValidAmount() }">
-              <span class="validation-icon">{{ (editAmount && isValidAmount()) ? '✓' : '○' }}</span>
-              <span>Amount</span>
-            </div>
-            <div class="validation-item" :class="{ 'valid': editMerchantName, 'invalid': !editMerchantName }">
-              <span class="validation-icon">{{ editMerchantName ? '✓' : '○' }}</span>
-              <span>Merchant Name</span>
-            </div>
-            <div class="validation-item" :class="{ 'valid': editMCC, 'invalid': !editMCC }">
-              <span class="validation-icon">{{ editMCC ? '✓' : '○' }}</span>
-              <span>MCC</span>
-            </div>
-          </div>
-
-          <div class="edit-actions">
-            <button @click="updateMerchantData" class="btn btn-primary edit-update-btn" :disabled="!canUpdate()">
-              🔐 Update & Encrypt Checksum (CRC-16/IBM-3740)
-            </button>
-            <button @click="resetEditForm" class="btn btn-secondary edit-reset-btn">
-              ↻ Reset Form
-            </button>
-            <button @click="toggleEditMode" class="btn btn-secondary edit-cancel-btn">
-              ❌ Cancel
-            </button>
+            <button v-if="!editMode" @click="copyToClipboard" class="copy-btn">📋 {{ copyText }}</button>
           </div>
         </div>
 
@@ -230,8 +217,9 @@
 
           <div class="tree-item" v-if="parsedTLV['01']">
             <span class="tree-tag">{{ parsedTLV['01'].tag }}</span>
-            <span class="tree-length">{{ String(parsedTLV['01'].length).padStart(2, '0') }}</span>
-            <span class="tree-data">{{ parsedTLV['01'].value }}</span>
+            <span class="tree-length">{{ String((parsedTLV['01'].value||'').length).padStart(2,'0') }}</span>
+            <input v-if="editMode" class="tree-edit-input tree-edit-input--short" v-model="parsedTLV['01'].value">
+            <span v-else class="tree-data">{{ parsedTLV['01'].value }}</span>
             <span class="tree-meaning">= {{ getInitiationMethodDescription(parsedTLV['01'].value) }}</span>
           </div>
 
@@ -505,155 +493,67 @@
         </div>
       </div>
 
-      <!-- Generate Tab -->
-      <div v-show="activeTab === 'generate'" class="tab-content">
-        <div class="input-area">
-          <div class="live-preview-toggle">
-            <label class="toggle-label">
-              <input type="checkbox" v-model="livePreview" class="toggle-checkbox">
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Live Preview</span>
-            </label>
           </div>
 
-          <textarea v-model="qrDataToGenerate" placeholder="Enter KHQR data to generate QR code..." class="input-field"
-            style="height: 150px;"></textarea>
+          <!-- Reference Panel -->
+          <div class="builder-ref">
+            <div class="reference-section">
+              <h3 class="reference-title">🏦 Banks</h3>
+              <div class="reference-grid">
+                <div class="reference-item" v-for="bank in cambodianBanks" :key="bank">
+                  <span class="bank-name">{{ bank }}</span>
+                </div>
+              </div>
+            </div>
 
-          <div class="action-buttons">
-            <button @click="generateQRCode" class="btn btn-primary" v-if="!livePreview">
-              ✨ Generate QR
-            </button>
-            <button @click="downloadQRCode" v-if="generatedQRImage" class="btn btn-primary">
-              ⬇️ Download
-            </button>
-            <button @click="clearGenerate" class="btn btn-secondary">
-              Clear
-            </button>
-          </div>
-        </div>
+            <div class="reference-section">
+              <h3 class="reference-title">🏷️ Tags</h3>
+              <div class="tag-definitions">
+                <div class="tag-def"><span class="tag-code">00</span><span class="tag-desc">Payload Format Indicator</span></div>
+                <div class="tag-def"><span class="tag-code">29</span><span class="tag-desc">Remittance (personal)</span></div>
+                <div class="tag-def"><span class="tag-code">30</span><span class="tag-desc">Merchant Info (business)</span></div>
+                <div class="tag-def"><span class="tag-code">51</span><span class="tag-desc">Acquirer Merchant ID</span></div>
+                <div class="tag-def"><span class="tag-code">52</span><span class="tag-desc">MCC – Business type</span></div>
+                <div class="tag-def"><span class="tag-code">53</span><span class="tag-desc">Currency (840=USD, 116=KHR)</span></div>
+                <div class="tag-def"><span class="tag-code">54</span><span class="tag-desc">Payment Amount</span></div>
+                <div class="tag-def"><span class="tag-code">58</span><span class="tag-desc">Country Code (KH)</span></div>
+                <div class="tag-def"><span class="tag-code">59</span><span class="tag-desc">Merchant Name</span></div>
+                <div class="tag-def"><span class="tag-code">60</span><span class="tag-desc">Merchant City</span></div>
+                <div class="tag-def"><span class="tag-code">62</span><span class="tag-desc">Additional Data</span></div>
+                <div class="tag-def"><span class="tag-code">63</span><span class="tag-desc">CRC-16 Checksum</span></div>
+                <div class="tag-def"><span class="tag-code">99</span><span class="tag-desc">Timestamp</span></div>
+              </div>
+            </div>
 
-        <div v-if="generatedQRImage" class="generate-result">
-          <h3 class="data-label">Generated QR Code</h3>
-          <div class="qr-display-container">
-            <img :src="generatedQRImage" alt="Generated QR Code" class="qr-image" />
-          </div>
+            <div class="reference-section">
+              <h3 class="reference-title">💼 MCC Codes</h3>
+              <div class="mcc-search">
+                <input v-model="mccSearchFilter" type="text" placeholder="Search..."
+                  class="mcc-search-input">
+              </div>
+              <div class="mcc-list">
+                <div class="mcc-item" v-for="(desc, code) in filteredMCCMap" :key="code">
+                  <span class="mcc-code">{{ code }}</span>
+                  <span class="mcc-desc">{{ desc }}</span>
+                </div>
+              </div>
+            </div>
 
-          <div class="download-options">
-            <label class="download-label">Download Format:</label>
-            <select v-model="downloadFormat" class="download-select">
-              <option value="svg">🌐 SVG (Recommended)</option>
-              <option value="png">🖼️ PNG</option>
-              <option value="jpg">📷 JPG</option>
-            </select>
-            <button @click="downloadQRCode" class="btn btn-primary">
-              ⬇️ Download
-            </button>
-          </div>
-
-          <div class="qr-data-display">
-            <h4 class="data-label" style="margin-top: 1rem;">Data</h4>
-            <pre class="data-content">{{ qrDataToGenerate }}</pre>
-          </div>
-        </div>
-      </div>
-
-      <!-- Reference Tab -->
-      <div v-show="activeTab === 'reference'" class="tab-content reference-tab">
-        <div class="reference-container">
-          <div class="reference-section">
-            <h3 class="reference-title">🏦 Cambodian Banks (Tag 29/30/51)</h3>
-            <div class="reference-grid">
-              <div class="reference-item" v-for="bank in cambodianBanks" :key="bank">
-                <span class="bank-name">{{ bank }}</span>
+            <div class="reference-section">
+              <h3 class="reference-title">💱 Currencies</h3>
+              <div class="currency-grid">
+                <div class="currency-item">
+                  <span class="curr-code">840</span>
+                  <span class="curr-name">USD</span>
+                </div>
+                <div class="currency-item">
+                  <span class="curr-code">116</span>
+                  <span class="curr-name">KHR</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="reference-section">
-            <h3 class="reference-title">🏷️ KHQR Tag Definitions</h3>
-            <div class="tag-definitions">
-              <div class="tag-def">
-                <span class="tag-code">00</span>
-                <span class="tag-desc">Payload Format Indicator - KHQR version</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">29</span>
-                <span class="tag-desc">Merchant Type - Remittance (bank account info)</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">30</span>
-                <span class="tag-desc">Merchant Type - Merchant (business info)</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">51</span>
-                <span class="tag-desc">Acquirer Merchant ID - Bank and merchant ID</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">52</span>
-                <span class="tag-desc">Merchant Category Code - Business type</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">53</span>
-                <span class="tag-desc">Currency Code - 840 (USD) or 116 (KHR)</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">54</span>
-                <span class="tag-desc">Payment Amount - Transaction value</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">58</span>
-                <span class="tag-desc">Country Code - KH (Cambodia)</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">59</span>
-                <span class="tag-desc">Merchant Name - Business name</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">60</span>
-                <span class="tag-desc">Merchant City - Business location</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">62</span>
-                <span class="tag-desc">Additional Data - Extra info (UDF, Bill ID, etc)</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">63</span>
-                <span class="tag-desc">CRC-16/IBM-3740 - Checksum for validation</span>
-              </div>
-              <div class="tag-def">
-                <span class="tag-code">99</span>
-                <span class="tag-desc">Timestamp - Transaction date/time</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="reference-section">
-            <h3 class="reference-title">💼 Merchant Category Codes (MCC)</h3>
-            <div class="mcc-search">
-              <input v-model="mccSearchFilter" type="text" placeholder="Search MCC by code or description..."
-                class="mcc-search-input">
-            </div>
-            <div class="mcc-list">
-              <div class="mcc-item" v-for="(desc, code) in filteredMCCMap" :key="code">
-                <span class="mcc-code">{{ code }}</span>
-                <span class="mcc-desc">{{ desc }}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="reference-section">
-            <h3 class="reference-title">💱 Currency Codes</h3>
-            <div class="currency-grid">
-              <div class="currency-item">
-                <span class="curr-code">840</span>
-                <span class="curr-name">USD (US Dollar)</span>
-              </div>
-              <div class="currency-item">
-                <span class="curr-code">116</span>
-                <span class="curr-name">KHR (Cambodian Riel)</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -679,7 +579,8 @@ export default {
       parsedTLV: {},
       manualQRInput: '00020101021229530016cadikhppxxx@cadi011300100053357230212Canadia Bank52040000530384054031.05802KH5911SAT SOVANDY6010Phnom Penh993400131765174265143011317652606651436304F3F6',
       copyText: 'Copy',
-      activeTab: 'decode',
+      activeTab: 'builder',
+      activeMode: 'build',
       generatedQRImage: null,
       qrDataToGenerate: '00020101021229530016cadikhppxxx@cadi011300100053357230212Canadia Bank52040000530384054031.05802KH5911SAT SOVANDY6010Phnom Penh993400131765174265143011317652606651436304F3F6',
       editMode: false,
@@ -706,6 +607,20 @@ export default {
       copiedItemId: null,
       livePreview: true,
       mccSearchFilter: '',
+      // Generate form fields
+      genType: 'static',
+      genMerchantType: 'merchant',
+      genBakongID: '',
+      genMerchantID: '',
+      genBankName: '',
+      genMCC: '',
+      genMCCSearch: '',
+      genCurrency: 'KHR',
+      genAmount: '',
+      genName: '',
+      genCity: '',
+      genQRString: '',
+      genCopyText: 'Copy',
       sampleDataOptions: [
         {
           name: 'Static Merchant',
@@ -1094,24 +1009,22 @@ export default {
 
       return filtered;
     },
+
+    filteredGenMCC() {
+      if (!this.genMCCSearch.trim()) return this.merchantCategoryMap;
+      const f = this.genMCCSearch.toLowerCase();
+      const result = {};
+      for (const [code, desc] of Object.entries(this.merchantCategoryMap)) {
+        if (code.includes(f) || desc.toLowerCase().includes(f)) result[code] = desc;
+      }
+      return result;
+    },
   },
   mounted() {
-    if (this.manualQRInput.trim()) {
-      this.$nextTick(() => {
-        this.decodeManualQR();
-      });
-    }
-
-    if (this.qrDataToGenerate.trim()) {
-      this.$nextTick(() => {
-        this.generateQRCode();
-      });
-    }
-
     document.addEventListener('paste', this.handleGlobalPaste);
   },
 
-  beforeDestroy() {
+  beforeUnmount() {
     document.removeEventListener('paste', this.handleGlobalPaste);
   },
 
@@ -1119,14 +1032,20 @@ export default {
     manualQRInput(newValue) {
       if (newValue.trim()) {
         this.decodeManualQR();
+        this.generateQRFromString(newValue.trim());
       }
     },
 
-    qrDataToGenerate(newValue) {
-      if (newValue.trim() && this.livePreview) {
-        this.generateQRPreview();
-      }
-    },
+    genType() { this.buildKHQRString(); },
+    genMerchantType() { this.buildKHQRString(); },
+    genBakongID() { this.buildKHQRString(); },
+    genMerchantID() { this.buildKHQRString(); },
+    genBankName() { this.buildKHQRString(); },
+    genMCC() { this.buildKHQRString(); },
+    genCurrency() { this.buildKHQRString(); },
+    genAmount() { this.buildKHQRString(); },
+    genName() { this.buildKHQRString(); },
+    genCity() { this.buildKHQRString(); },
   },
 
   methods: {
@@ -1317,10 +1236,34 @@ export default {
 
     clearData() {
       this.qrResult = '';
-      this.headerInfo = {};
+      this.headerInfo = {
+        bankInfoNested: {},
+        timestampNested: {},
+        tag29Nested: {},
+        tag30Nested: {},
+        tag62Nested: {},
+      };
       this.parsedTLV = {};
       this.manualQRInput = '';
       this.copyText = 'Copy';
+    },
+
+    clearAll() {
+      this.clearData();
+      this.generatedQRImage = null;
+      this.qrDataToGenerate = '';
+      this.genType = 'static';
+      this.genMerchantType = 'merchant';
+      this.genBakongID = '';
+      this.genMerchantID = '';
+      this.genBankName = '';
+      this.genMCC = '';
+      this.genMCCSearch = '';
+      this.genCurrency = 'KHR';
+      this.genAmount = '';
+      this.genName = '';
+      this.genCity = '';
+      this.genQRString = '';
     },
 
     copyToClipboard() {
@@ -1673,6 +1616,92 @@ export default {
     clearGenerate() {
       this.qrDataToGenerate = '';
       this.generatedQRImage = null;
+      this.genType = 'static';
+      this.genMerchantType = 'merchant';
+      this.genBakongID = '';
+      this.genMerchantID = '';
+      this.genBankName = '';
+      this.genMCC = '';
+      this.genMCCSearch = '';
+      this.genCurrency = 'KHR';
+      this.genAmount = '';
+      this.genName = '';
+      this.genCity = '';
+      this.genQRString = '';
+    },
+
+    buildNestedTag(tagNum, pairs) {
+      let inner = '';
+      for (const [subtag, value] of pairs) {
+        if (!value) continue;
+        inner += subtag + String(value.length).padStart(2, '0') + value;
+      }
+      if (!inner) return '';
+      return tagNum + String(inner.length).padStart(2, '0') + inner;
+    },
+
+    buildKHQRString() {
+      try {
+        let qr = '000201';
+        qr += this.genType === 'static' ? '010211' : '010212';
+
+        const tag = this.genMerchantType === 'remittance' ? '29' : '30';
+        const nested = this.buildNestedTag(tag, [
+          ['00', this.genBakongID],
+          ['01', this.genMerchantID],
+          ['02', this.genBankName],
+        ]);
+        if (nested) qr += nested;
+
+        const mcc = this.genMCC || '0000';
+        qr += '52' + String(mcc.length).padStart(2, '0') + mcc;
+
+        const currCode = this.genCurrency === 'USD' ? '840' : '116';
+        qr += '5303' + currCode;
+
+        if (this.genType === 'dynamic' && this.genAmount) {
+          qr += '54' + String(this.genAmount.length).padStart(2, '0') + this.genAmount;
+        }
+
+        qr += '5802KH';
+
+        if (this.genName) qr += '59' + String(this.genName.length).padStart(2, '0') + this.genName;
+        if (this.genCity) qr += '60' + String(this.genCity.length).padStart(2, '0') + this.genCity;
+
+        const crc = this.calculateCRC16(qr);
+        qr += '6304' + crc;
+
+        this.genQRString = qr;
+        this.qrDataToGenerate = qr;
+        this.processQRResult(qr);
+        this.generateQRFromString(qr);
+      } catch (e) {
+        console.error('KHQR build error:', e);
+      }
+    },
+
+    async generateQRFromString(str) {
+      if (!str) return;
+      try {
+        this.generatedQRImage = await QRCode.toDataURL(str, {
+          errorCorrectionLevel: 'H',
+          type: 'image/png',
+          quality: 0.95,
+          margin: 1,
+          width: 300,
+          color: { dark: '#000000', light: '#FFFFFF' },
+        });
+      } catch (e) {
+        console.error('QR generation error:', e);
+      }
+    },
+
+    copyGenString() {
+      if (!this.genQRString) return;
+      navigator.clipboard.writeText(this.genQRString).then(() => {
+        this.genCopyText = 'Copied!';
+        setTimeout(() => { this.genCopyText = 'Copy'; }, 2000);
+      });
     },
 
     calculateTimeDifference(timeDiff) {
@@ -1791,14 +1820,14 @@ export default {
 }
 
 .header {
-  background: linear-gradient(135deg, #1e40af 0%, #0ea5e9 100%);
-  border-bottom: 4px solid #0284c7;
-  padding: 3rem 2.5rem;
+  background: #1e40af;
+  border-bottom: 3px solid #1d4ed8;
+  padding: 1.5rem 2.5rem;
   text-align: left;
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 8px 24px rgba(30, 64, 175, 0.3);
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.25);
 }
 
 .header-content {
@@ -1823,14 +1852,7 @@ export default {
 }
 
 .tab-navigation {
-  display: flex;
-  gap: 0;
-  padding: 0 2.5rem;
-  background: linear-gradient(to right, #ffffff, #f8fafc);
-  border-bottom: 3px solid #dbeafe;
-  position: sticky;
-  top: 6.2rem;
-  z-index: 9;
+  display: none;
 }
 
 .tab-button {
@@ -1875,30 +1897,25 @@ export default {
 }
 
 .input-area {
-  padding: 2.8rem 2.5rem;
+  padding: 1.8rem 2.5rem;
   flex-shrink: 0;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border-bottom: 3px solid #bae6fd;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .sample-selector {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 2.2rem;
-  padding: 1.8rem;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 14px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.2rem;
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
 }
 
 .sample-selector:hover {
-  border-color: #0284c7;
-  background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
-  transform: translateY(-2px);
+  border-color: #7dd3fc;
 }
 
 .sample-label {
@@ -2037,11 +2054,11 @@ export default {
 }
 
 .result-section {
-  padding: 2.8rem 2.5rem;
-  padding-bottom: 220px;
-  border-top: 3px solid #bae6fd;
+  padding: 1.8rem 2.5rem;
+  padding-bottom: 80px;
+  border-top: 1px solid #e2e8f0;
   overflow-y: auto;
-  background: linear-gradient(to bottom, #f0f9ff, #ffffff);
+  background: white;
 }
 
 .result-header {
@@ -2298,14 +2315,12 @@ export default {
 .summary-card {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.3rem;
-  padding: 1.8rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 14px;
-  margin-bottom: 2rem;
-  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
-  animation: slideUpIn 0.5s ease;
+  gap: 1rem;
+  padding: 1.2rem 1.5rem;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
 }
 
 .summary-item {
@@ -2777,98 +2792,378 @@ export default {
   border-left-color: #22c55e !important;
 }
 
-.generate-result {
-  padding: 1.25rem 1.5rem;
-  background: white;
+/* ── Builder Layout ─────────────────────────────── */
+.builder-layout {
+  display: grid;
+  grid-template-columns: 360px 1fr 260px;
+  height: calc(100vh - 80px);
+}
+
+.builder-left {
+  border-right: 1px solid #e2e8f0;
   overflow-y: auto;
-}
-
-.qr-display-container {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 1.25rem;
-  background: white;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  margin: 1rem 0;
+  flex-direction: column;
 }
 
-.qr-image {
-  max-width: 100%;
-  height: auto;
-  border-radius: 0px;
-  box-shadow: none;
-}
-
-.download-options {
+.builder-right {
+  overflow-y: auto;
+  padding: 1.5rem 1.5rem;
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #f5f5f5;
-  border: 1px solid #000000;
-  border-radius: 0px;
+  flex-direction: column;
+  gap: 1.2rem;
+  border-right: 1px solid #e2e8f0;
+}
+
+.builder-ref {
+  overflow-y: auto;
+  padding: 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: #fafbfc;
+}
+
+.mode-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 0.85rem 1rem;
+  border: none;
+  background: none;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.mode-tab.active {
+  color: #0284c7;
+  border-bottom-color: #0284c7;
+  background: #f0f9ff;
+}
+
+.mode-tab:hover:not(.active) {
+  color: #334155;
+  background: #f8fafc;
+}
+
+.build-mode,
+.paste-mode {
+  padding: 1.5rem;
+  flex: 1;
+}
+
+.paste-mode .input-field {
+  height: 160px;
   margin-bottom: 1rem;
 }
 
-.download-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #000000;
-  white-space: nowrap;
+.qr-output-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
 }
 
-.download-select {
-  flex: 1;
-  padding: 0.5rem;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #000000;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.decode-output {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
-.download-select:hover {
-  border-color: #000000;
+@media (max-width: 1100px) {
+  .builder-layout {
+    grid-template-columns: 340px 1fr;
+  }
+  .builder-ref {
+    display: none;
+  }
 }
 
-.download-select:focus {
-  outline: none;
-  border-color: #000000;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+@media (max-width: 900px) {
+  .builder-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .builder-left {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+    max-height: none;
+  }
+
+  .builder-right {
+    padding: 1.2rem;
+  }
 }
 
-.qr-data-display {
-  margin-top: 1rem;
+/* ── Generate Tab (kept for backwards compat) ───── */
+.gen-wrapper {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  min-height: 520px;
 }
 
-.data-label {
-  font-size: 0.65rem;
+.gen-form {
+  padding: 2rem 2.5rem;
+  border-right: 1px solid #e2e8f0;
+  overflow-y: auto;
+}
+
+.gen-toggles {
+  display: flex;
+  gap: 2rem;
+  margin-bottom: 1.8rem;
+  flex-wrap: wrap;
+}
+
+.gen-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.gen-toggle-label {
+  font-size: 0.8rem;
   font-weight: 700;
-  color: #000000;
-  margin: 0 0 0.75rem 0;
+  color: #64748b;
+  white-space: nowrap;
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
 
-.data-content {
+.seg-ctrl {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.seg-btn {
+  padding: 0.35rem 0.9rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.seg-btn.active {
   background: white;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  padding: 0.75rem;
-  margin: 0;
+  color: #0284c7;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.gen-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.2rem;
+}
+
+.gen-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.gen-field label {
   font-size: 0.75rem;
-  overflow-x: auto;
-  word-break: break-all;
-  color: #000000;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.gen-maxlen {
+  font-weight: 400;
+  color: #94a3b8;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.gen-input {
+  padding: 0.65rem 0.85rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: #0f172a;
+  background: white;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+}
+
+.gen-input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.gen-input-mt {
+  margin-top: 0.4rem;
+}
+
+.gen-hint {
+  font-size: 0.72rem;
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.gen-clear {
+  margin-top: 1.5rem;
+}
+
+/* Preview panel */
+.gen-preview {
+  padding: 1.5rem;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-top: none;
+}
+
+.qr-preview-box {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem;
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.qr-preview-img {
+  max-width: 220px;
+  height: auto;
+}
+
+.qr-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  padding: 3rem 1.5rem;
+  background: white;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.qr-placeholder-icon {
+  font-size: 2.5rem;
+  opacity: 0.25;
+}
+
+.qr-placeholder p {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.gen-raw {
+  background: white;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.gen-raw-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.gen-raw-header span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.gen-copy-btn {
+  padding: 0.25rem 0.6rem;
+  background: #0284c7;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: inherit;
+}
+
+.gen-copy-btn:hover { background: #0369a1; }
+
+.gen-raw-content {
+  padding: 0.75rem;
   font-family: 'Monaco', 'Courier New', monospace;
-  line-height: 1.4;
-  max-height: 200px;
-  transition: background-color 0.2s ease;
+  font-size: 0.68rem;
+  word-break: break-all;
+  color: #0f172a;
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+.gen-dl {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.gen-dl-select {
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: white;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .gen-wrapper {
+    grid-template-columns: 1fr;
+  }
+
+  .gen-form {
+    padding: 1.5rem 1.2rem;
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .gen-preview {
+    padding: 1.5rem 1.2rem;
+  }
+
+  .gen-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .gen-toggles {
+    gap: 1rem;
+  }
 }
 
 .reference-tab {
@@ -3145,8 +3440,8 @@ export default {
   }
 
   .header {
-    padding: 1.5rem 1.2rem;
-    border-bottom: 3px solid #0284c7;
+    padding: 1rem 1.2rem;
+    border-bottom: 2px solid #1d4ed8;
   }
 
   .title {
@@ -3163,7 +3458,7 @@ export default {
   .tab-navigation {
     padding: 0 0.8rem;
     gap: 0;
-    top: 5rem;
+    top: 4rem;
   }
 
   .tab-button {

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Gold Price Tracker</title>
+  <style>
+    /* Import fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Kantumruy+Pro:wght@300;400;500;600;700&display=swap');
+    
+    :root {
+      --font-family: 'Poppins', sans-serif;
+      --gold-color: #d4af37;
+      --background-light: #f9f9f9;
+      --text-color: #333;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: var(--font-family);
+      background: linear-gradient(-45deg, #f5d742, #ffc83d, #d4af37, #a67c00);
+      background-size: 400% 400%;
+      animation: gradientBG 12s ease infinite;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+    
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    
+    .offline-container {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .offline-icon {
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+    
+    .offline-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 15px;
+      color: var(--text-color);
+    }
+    
+    .offline-message {
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 25px;
+      color: #555;
+    }
+    
+    .cached-data {
+      background: rgba(212, 175, 55, 0.1);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    
+    .cached-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: var(--gold-color);
+    }
+    
+    .price-display {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 15px;
+    }
+    
+    .price-label {
+      opacity: 0.8;
+    }
+    
+    .price-value {
+      font-weight: 600;
+    }
+    
+    .update-time {
+      font-size: 12px;
+      opacity: 0.7;
+      font-style: italic;
+      text-align: center;
+      margin-top: 5px;
+    }
+    
+    .retry-button {
+      background: var(--gold-color);
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 50px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-family: var(--font-family);
+      box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+    }
+    
+    .retry-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+    }
+    
+    /* Khmer language support */
+    [lang="km"] {
+      font-family: 'Kantumruy Pro', sans-serif;
+    }
+    
+    .language-switch {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      border-radius: 20px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+  </style>
+</head>
+<body>
+  <button class="language-switch" onclick="toggleLanguage()">
+    <span id="language-display">🇺🇸 English</span>
+  </button>
+  
+  <div class="offline-container">
+    <div class="offline-icon">📡</div>
+    <h1 class="offline-title" data-en="You're Offline" data-km="អ្នកគ្មានអ៊ីនធឺណិត">You're Offline</h1>
+    <p class="offline-message" data-en="It looks like you've lost your internet connection. Don't worry, you can still view the last cached gold prices below." data-km="ហាក់បីដូចជាអ្នកបានបាត់បង់ការតភ្ជាប់អ៊ីនធឺណិតរបស់អ្នក។ កុំបារម្ភ អ្នកនៅតែអាចមើលតម្លៃមាសដែលបានរក្សាទុកចុងក្រោយខាងក្រោម។">
+      It looks like you've lost your internet connection. Don't worry, you can still view the last cached gold prices below.
+    </p>
+    
+    <div class="cached-data">
+      <h3 class="cached-title" data-en="Last Known Gold Prices" data-km="តម្លៃមាសចុងក្រោយដែលបានដឹង">Last Known Gold Prices</h3>
+      
+      <div id="cached-prices">
+        <!-- This will be populated with JavaScript if available -->
+        <div class="price-display">
+          <span class="price-label" data-en="Gold (per ounce)" data-km="មាស (ក្នុងមួយអោន)">Gold (per ounce)</span>
+          <span class="price-value">$2,023.50</span>
+        </div>
+        <div class="price-display">
+          <span class="price-label" data-en="Damlung" data-km="ដំឡឹង">Damlung</span>
+          <span class="price-value">$2,435.85</span>
+        </div>
+        <div class="price-display">
+          <span class="price-label" data-en="Chi" data-km="ជី">Chi</span>
+          <span class="price-value">$243.59</span>
+        </div>
+      </div>
+      
+      <div class="update-time" data-en="Last updated:" data-km="បានធ្វើបច្ចុប្បន្នភាពចុងក្រោយ៖">
+        Last updated: <span id="last-update-time">April 15, 2025 10:35 AM</span>
+      </div>
+    </div>
+    
+    <button class="retry-button" onclick="retryConnection()" data-en="Try Again" data-km="ព្យាយាមម្តងទៀត">
+      Try Again
+    </button>
+  </div>
+  
+  <script>
+    // Display cached data from localStorage if available
+    function displayCachedData() {
+      if (typeof localStorage !== 'undefined') {
+        try {
+          // Get price history from localStorage
+          const priceHistory = JSON.parse(localStorage.getItem('priceHistory')) || [];
+          
+          if (priceHistory.length > 0) {
+            // Latest price is the first in the array
+            const latestPrice = priceHistory[0];
+            
+            // Create HTML for prices
+            let pricesHTML = '';
+            pricesHTML += `<div class="price-display">
+              <span class="price-label" data-en="Gold (per ounce)" data-km="មាស (ក្នុងមួយអោន)">Gold (per ounce)</span>
+              <span class="price-value">${latestPrice.ounce}</span>
+            </div>`;
+            pricesHTML += `<div class="price-display">
+              <span class="price-label" data-en="Damlung" data-km="ដំឡឹង">Damlung</span>
+              <span class="price-value">${latestPrice.damlung}</span>
+            </div>`;
+            pricesHTML += `<div class="price-display">
+              <span class="price-label" data-en="Chi" data-km="ជី">Chi</span>
+              <span class="price-value">${latestPrice.chi}</span>
+            </div>`;
+            
+            // Update HTML
+            document.getElementById('cached-prices').innerHTML = pricesHTML;
+            document.getElementById('last-update-time').textContent = latestPrice.timestamp;
+          }
+          
+          // Apply saved language
+          const savedLanguage = localStorage.getItem('language') || 'en';
+          setLanguage(savedLanguage);
+        } catch (error) {
+          console.error('Error loading cached data:', error);
+        }
+      }
+    }
+    
+    // Try to reconnect
+    function retryConnection() {
+      window.location.href = '/';
+    }
+    
+    // Toggle language
+    function toggleLanguage() {
+      const currentLang = document.documentElement.lang;
+      const newLang = currentLang === 'en' ? 'km' : 'en';
+      setLanguage(newLang);
+      
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('language', newLang);
+      }
+    }
+    
+    // Set language
+    function setLanguage(lang) {
+      document.documentElement.lang = lang;
+      document.getElementById('language-display').textContent = 
+        lang === 'en' ? '🇰🇭 ខ្មែរ' : '🇺🇸 English';
+      
+      // Update all translatable elements
+      const elements = document.querySelectorAll('[data-en][data-km]');
+      elements.forEach(el => {
+        el.textContent = el.getAttribute(`data-${lang}`);
+      });
+    }
+    
+    // Initialize on page load
+    window.addEventListener('DOMContentLoaded', function() {
+      displayCachedData();
+    });
+  </script>
+</body>
+</html>

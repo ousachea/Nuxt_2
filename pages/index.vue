@@ -19,11 +19,11 @@
     <main class="main">
       <div class="container">
         <div class="grid">
-          <nuxt-link v-for="page in filteredPages" :key="page.route" :to="page.route" class="card"
+          <NuxtLink v-for="page in filteredPages" :key="page.route" :to="page.route" class="card"
             exact-active-class="card-active">
             <div class="card-icon">{{ page.icon || '📄' }}</div>
             <span class="card-name">{{ page.name }}</span>
-          </nuxt-link>
+          </NuxtLink>
         </div>
 
         <!-- Empty -->
