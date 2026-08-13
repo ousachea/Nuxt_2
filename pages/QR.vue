@@ -1,510 +1,659 @@
 <template>
   <div class="container">
     <div class="scanner-card">
-
-      <header class="header">
-        <span class="title">🇰🇭 KHQR</span>
-        <span class="header-sub">Studio</span>
-        <div v-if="qrResult" class="nav-copy-field">
-          <input readonly :value="qrResult" class="nav-copy-input" @click="$event.target.select()" />
-          <button @click="copyToClipboard" class="nav-copy-btn">{{ copyText }}</button>
+      <div class="header">
+        <div class="header-content">
+          <h1 class="title">🇰🇭 KHQR Scanner</h1>
+          <p class="subtitle">Decode and generate Cambodian payment QR codes</p>
         </div>
-        <button class="ref-trigger" @click="showRef = true">Reference</button>
-      </header>
+      </div>
 
-      <!-- Reference Popup -->
-      <transition name="ref-fade">
-        <div v-if="showRef" class="ref-overlay" @click.self="showRef = false">
-          <div class="ref-drawer">
-            <div class="ref-drawer-header">
-              <span class="ref-drawer-title">Reference</span>
-              <button class="ref-close" @click="showRef = false">✕</button>
-            </div>
-            <div class="ref-drawer-body">
-              <div class="reference-section">
-                <h3 class="reference-title">Banks</h3>
-                <div class="reference-grid">
-                  <div class="reference-item" v-for="bank in cambodianBanks" :key="bank">
-                    <span class="bank-name">{{ bank }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="reference-section">
-                <h3 class="reference-title">Tags</h3>
-                <div class="tag-definitions">
-                  <div class="tag-def"><span class="tag-code">00</span><span class="tag-desc">Payload Format Indicator</span></div>
-                  <div class="tag-def"><span class="tag-code">29</span><span class="tag-desc">Remittance (personal)</span></div>
-                  <div class="tag-def"><span class="tag-code">30</span><span class="tag-desc">Merchant Info (business)</span></div>
-                  <div class="tag-def"><span class="tag-code">51</span><span class="tag-desc">Acquirer Merchant ID</span></div>
-                  <div class="tag-def"><span class="tag-code">52</span><span class="tag-desc">MCC – Business type</span></div>
-                  <div class="tag-def"><span class="tag-code">53</span><span class="tag-desc">Currency (840=USD, 116=KHR)</span></div>
-                  <div class="tag-def"><span class="tag-code">54</span><span class="tag-desc">Payment Amount</span></div>
-                  <div class="tag-def"><span class="tag-code">58</span><span class="tag-desc">Country Code (KH)</span></div>
-                  <div class="tag-def"><span class="tag-code">59</span><span class="tag-desc">Merchant Name</span></div>
-                  <div class="tag-def"><span class="tag-code">60</span><span class="tag-desc">Merchant City</span></div>
-                  <div class="tag-def"><span class="tag-code">62</span><span class="tag-desc">Additional Data</span></div>
-                  <div class="tag-def"><span class="tag-code">63</span><span class="tag-desc">CRC-16 Checksum</span></div>
-                  <div class="tag-def"><span class="tag-code">99</span><span class="tag-desc">Timestamp</span></div>
-                </div>
-              </div>
-              <div class="reference-section">
-                <h3 class="reference-title">MCC Codes</h3>
-                <div class="mcc-search">
-                  <input v-model="mccSearchFilter" type="text" placeholder="Search MCC..." class="mcc-search-input">
-                </div>
-                <div class="mcc-list">
-                  <div class="mcc-item" v-for="(desc, code) in filteredMCCMap" :key="code">
-                    <span class="mcc-code">{{ code }}</span>
-                    <span class="mcc-desc">{{ desc }}</span>
-                  </div>
-                </div>
-              </div>
-              <div class="reference-section">
-                <h3 class="reference-title">Currencies</h3>
-                <div class="currency-grid">
-                  <div class="currency-item">
-                    <span class="curr-code">840</span><span class="curr-name">USD</span>
-                  </div>
-                  <div class="currency-item">
-                    <span class="curr-code">116</span><span class="curr-name">KHR</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+      <div class="tab-navigation">
+        <button @click="activeTab = 'decode'" :class="['tab-button', { active: activeTab === 'decode' }]">
+          <span class="tab-icon">🔍</span>
+          <span class="tab-text">Decode</span>
+        </button>
+        <button @click="activeTab = 'generate'" :class="['tab-button', { active: activeTab === 'generate' }]">
+          <span class="tab-icon">✨</span>
+          <span class="tab-text">Generate</span>
+        </button>
+        <button @click="activeTab = 'reference'" :class="['tab-button', { active: activeTab === 'reference' }]">
+          <span class="tab-icon">📚</span>
+          <span class="tab-text">Reference</span>
+        </button>
+      </div>
+
+      <!-- Decode Tab -->
+      <div v-show="activeTab === 'decode'" class="tab-content">
+        <div class="input-area">
+          <div class="sample-selector">
+            <label class="sample-label">📋 Sample Data:</label>
+            <select @change="loadSampleData" class="sample-select">
+              <option value="">-- Select Sample --</option>
+              <option v-for="sample in sampleDataOptions" :key="sample.name" :value="sample.data">
+                {{ sample.name }}
+              </option>
+            </select>
+          </div>
+
+          <textarea v-model="manualQRInput" @paste="handlePaste" placeholder="Paste QR code data..."
+            class="input-field"></textarea>
+
+          <div class="action-buttons">
+            <button @click="pasteFromClipboard" class="btn btn-primary paste-btn">
+              📋 Paste from Clipboard
+            </button>
+            <button @click="clearData" class="btn btn-secondary">
+              Clear
+            </button>
           </div>
         </div>
-      </transition>
+      </div>
 
-      <div class="tab-content">
-        <div class="builder-layout">
+      <!-- Results - TLV Tree Structure -->
+      <div v-if="qrResult && activeTab === 'decode'" class="result-section">
+        <!-- MCC Warning Alert -->
+        <div v-if="!headerInfo.merchantCategoryTag" class="mcc-warning-alert">
+          <span class="mcc-warning-icon">⚠️</span>
+          <div class="mcc-warning-content">
+            <span class="mcc-warning-title">Merchant Category Code (MCC) Not Found</span>
+            <span class="mcc-warning-desc">Tag 52 is missing. Consider adding MCC in edit mode for complete merchant
+              classification.</span>
+          </div>
+          <button @click="toggleEditMode" class="mcc-warning-btn">Add MCC</button>
+        </div>
 
-          <!-- Left Panel -->
-          <aside class="builder-left">
-            <div class="paste-mode">
-              <div class="sample-selector">
-                <label class="sample-label">Sample</label>
-                <select @change="loadSampleData" class="sample-select">
-                  <option value="">— Select —</option>
-                  <option v-for="sample in sampleDataOptions" :key="sample.name" :value="sample.data">
-                    {{ sample.name }}
+        <!-- Data Summary Card -->
+        <div class="summary-card">
+          <div class="summary-item">
+            <span class="summary-label">Merchant:</span>
+            <span class="summary-value">{{ headerInfo.merchantNameTag?.value || 'N/A' }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Amount:</span>
+            <span class="summary-value">{{ headerInfo.amountTag?.value ? headerInfo.amountTag.value + ' ' +
+          (headerInfo.currencyTag?.value === '840' ? 'USD' : 'KHR') : 'N/A' }}</span>
+          </div>
+          <div class="summary-item"
+            :class="{ 'mcc-present': headerInfo.merchantCategoryTag, 'mcc-missing': !headerInfo.merchantCategoryTag }">
+            <span class="summary-label">Category (MCC):</span>
+            <span class="summary-value">
+              <span v-if="headerInfo.merchantCategoryTag" class="mcc-badge mcc-badge-present">
+                ✓ {{ headerInfo.merchantCategoryTag.value }}
+              </span>
+              <span v-else class="mcc-badge mcc-badge-missing">
+                ✗ Not Present
+              </span>
+            </span>
+          </div>
+          <div class="summary-item" :class="getTimestampStatusClass()">
+            <span class="summary-label">Timestamp:</span>
+            <span class="summary-value">
+              <span v-if="headerInfo.timestampNested?.['01']" :class="getTimestampBadgeClass()">
+                {{ getTimestampStatus() }}
+              </span>
+              <span v-else class="ts-badge ts-badge-none">
+                ✗ Not Present
+              </span>
+            </span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Data:</span>
+            <span class="summary-value">{{ qrResult.length }} bytes / {{ Object.keys(parsedTLV).length }} tags</span>
+          </div>
+        </div>
+
+        <div class="result-header">
+          <h2>TLV Structure</h2>
+          <div class="header-buttons">
+            <button @click="toggleEditMode" class="copy-btn" :class="{ 'edit-active': editMode }">
+              {{ editMode ? '❌ Cancel' : '✏️ Edit' }}
+            </button>
+            <button @click="copyToClipboard" class="copy-btn">
+              📋 {{ copyText }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Edit Panel -->
+        <div class="edit-panel" v-if="editMode">
+          <div class="edit-panel-header">
+            <h3>Edit KHQR Data</h3>
+            <span class="edit-info">Modify fields and update checksum</span>
+          </div>
+
+          <div class="edit-form-section">
+            <div class="edit-field">
+              <label>Merchant ID:</label>
+              <input v-model="editMerchantID" type="text" class="edit-input" placeholder="e.g., MERCHANT123"
+                maxlength="50">
+              <span v-if="editMerchantID" class="edit-field-hint">{{ editMerchantID.length }} chars</span>
+            </div>
+
+            <div class="edit-field">
+              <label>Currency:</label>
+              <select v-model="editCurrency" class="edit-select">
+                <option value="KHR">KHR (Cambodian Riel)</option>
+                <option value="USD">USD (US Dollar)</option>
+              </select>
+            </div>
+
+            <div class="edit-field">
+              <label>Amount:</label>
+              <input v-model="editAmount" type="text" class="edit-input" placeholder="e.g., 100.50"
+                @input="validateAmount">
+              <span v-if="editAmount && !isValidAmount()" class="edit-field-error">⚠️ Invalid amount format</span>
+              <span v-else-if="editAmount" class="edit-field-hint">Valid amount</span>
+            </div>
+
+            <div class="edit-field">
+              <label>Merchant Name:</label>
+              <input v-model="editMerchantName" type="text" class="edit-input" placeholder="e.g., My Business"
+                maxlength="50">
+              <span v-if="editMerchantName" class="edit-field-hint">{{ editMerchantName.length }} chars</span>
+            </div>
+
+            <div class="edit-field">
+              <label>Merchant City:</label>
+              <input v-model="editMerchantCity" type="text" class="edit-input" placeholder="e.g., Phnom Penh"
+                maxlength="50">
+              <span v-if="editMerchantCity" class="edit-field-hint">{{ editMerchantCity.length }} chars</span>
+            </div>
+
+            <div class="edit-field">
+              <label>Bank Name:</label>
+              <select v-model="editBankName" class="edit-select">
+                <option value="">-- Select Bank --</option>
+                <option v-for="bank in cambodianBanks" :key="bank" :value="bank">{{ bank }}</option>
+              </select>
+            </div>
+
+            <div class="edit-field">
+              <label>Merchant Category Code (MCC):</label>
+              <div class="mcc-selection">
+                <input v-model="mccSearchInput" type="text" class="edit-input"
+                  placeholder="Search MCC code or description...">
+                <select v-model="editMCC" class="edit-select">
+                  <option value="">-- Select Category --</option>
+                  <option v-for="(desc, code) in filteredMCCForEdit" :key="code" :value="code">
+                    {{ code }} - {{ desc }}
                   </option>
                 </select>
               </div>
-              <textarea v-model="manualQRInput" @paste="handlePaste"
-                placeholder="Paste KHQR string here..." class="input-field"></textarea>
-              <div class="action-buttons">
-                <button @click="pasteFromClipboard" class="btn btn-primary">Paste</button>
-                <button @click="clearAll" class="btn btn-ghost">Clear</button>
+              <span v-if="editMCC" class="edit-field-hint">
+                Selected: {{ editMCC }} - {{ merchantCategoryMap[editMCC] }}
+              </span>
+            </div>
+          </div>
+
+          <div class="edit-validation-summary">
+            <div class="validation-item" :class="{ 'valid': editMerchantID, 'invalid': !editMerchantID }">
+              <span class="validation-icon">{{ editMerchantID ? '✓' : '○' }}</span>
+              <span>Merchant ID</span>
+            </div>
+            <div class="validation-item"
+              :class="{ 'valid': editAmount && isValidAmount(), 'invalid': editAmount && !isValidAmount() }">
+              <span class="validation-icon">{{ (editAmount && isValidAmount()) ? '✓' : '○' }}</span>
+              <span>Amount</span>
+            </div>
+            <div class="validation-item" :class="{ 'valid': editMerchantName, 'invalid': !editMerchantName }">
+              <span class="validation-icon">{{ editMerchantName ? '✓' : '○' }}</span>
+              <span>Merchant Name</span>
+            </div>
+            <div class="validation-item" :class="{ 'valid': editMCC, 'invalid': !editMCC }">
+              <span class="validation-icon">{{ editMCC ? '✓' : '○' }}</span>
+              <span>MCC</span>
+            </div>
+          </div>
+
+          <div class="edit-actions">
+            <button @click="updateMerchantData" class="btn btn-primary edit-update-btn" :disabled="!canUpdate()">
+              🔐 Update & Encrypt Checksum (CRC-16/IBM-3740)
+            </button>
+            <button @click="resetEditForm" class="btn btn-secondary edit-reset-btn">
+              ↻ Reset Form
+            </button>
+            <button @click="toggleEditMode" class="btn btn-secondary edit-cancel-btn">
+              ❌ Cancel
+            </button>
+          </div>
+        </div>
+
+        <div class="tlv-tree">
+          <!-- Root tags -->
+          <div class="tree-item" v-if="parsedTLV['00']">
+            <span class="tree-tag">{{ parsedTLV['00'].tag }}</span>
+            <span class="tree-length">{{ String(parsedTLV['00'].length).padStart(2, '0') }}</span>
+            <span class="tree-data">{{ parsedTLV['00'].value }}</span>
+            <span class="tree-meaning">= Version</span>
+          </div>
+
+          <div class="tree-item" v-if="parsedTLV['01']">
+            <span class="tree-tag">{{ parsedTLV['01'].tag }}</span>
+            <span class="tree-length">{{ String(parsedTLV['01'].length).padStart(2, '0') }}</span>
+            <span class="tree-data">{{ parsedTLV['01'].value }}</span>
+            <span class="tree-meaning">= {{ getInitiationMethodDescription(parsedTLV['01'].value) }}</span>
+          </div>
+
+          <!-- Tag 29: Remittance (nested) -->
+          <div class="tree-item tree-parent" v-if="headerInfo.tag29">
+            <span class="tree-tag">29</span>
+            <span class="tree-length">{{ formatLength(headerInfo.tag29.length) }}</span>
+            <span class="tree-meaning">= Remittance</span>
+
+            <!-- Sub-layer for Tag 29 -->
+            <div class="tree-sublayer" v-if="Object.keys(headerInfo.tag29Nested).length > 0">
+              <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['00']">
+                <span class="tree-tag">00</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['00'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag29Nested['00'].value }}</span>
+                <span class="tree-meaning">= Bakong ID</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['01']">
+                <span class="tree-tag">01</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['01'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag29Nested['01'].value }}</span>
+                <span class="tree-meaning">= Merchant ID</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['02']">
+                <span class="tree-tag">02</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['02'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag29Nested['02'].value }}</span>
+                <span class="tree-meaning">= Bank Name</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['10']">
+                <span class="tree-tag">10</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['10'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag29Nested['10'].value }}</span>
+                <span class="tree-meaning">= Account Number</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['11']">
+                <span class="tree-tag">11</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['11'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag29Nested['11'].value }}</span>
+                <span class="tree-meaning">= Reference Number</span>
               </div>
             </div>
+          </div>
 
-          </aside>
+          <!-- Tag 30: Merchant Info (nested) -->
+          <div class="tree-item tree-parent" v-if="headerInfo.tag30">
+            <span class="tree-tag">30</span>
+            <span class="tree-length">{{ formatLength(headerInfo.tag30.length) }}</span>
+            <span class="tree-meaning">= Merchant Info</span>
 
-          <!-- Right Panel -->
-          <main class="builder-right">
-
-            <div v-if="generatedQRImage" class="qr-output-section">
-              <div class="qr-preview-box">
-                <img :src="generatedQRImage" alt="QR Code" class="qr-preview-img" />
+            <!-- Sub-layer for Tag 30 -->
+            <div class="tree-sublayer" v-if="Object.keys(headerInfo.tag30Nested).length > 0">
+              <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['00']">
+                <span class="tree-tag">00</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['00'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag30Nested['00'].value }}</span>
+                <span class="tree-meaning">= Bakong ID</span>
               </div>
-              <div class="gen-dl">
-                <select v-model="downloadFormat" class="gen-dl-select">
-                  <option value="png">PNG</option>
-                  <option value="svg">SVG</option>
-                  <option value="jpg">JPG</option>
-                </select>
-                <button @click="downloadQRCode" class="btn btn-primary">↓ Image</button>
+              <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['01']">
+                <span class="tree-tag">01</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['01'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag30Nested['01'].value }}</span>
+                <span class="tree-meaning">= Merchant ID</span>
               </div>
-            </div>
-            <div v-else class="qr-placeholder">
-              <div class="qr-placeholder-icon">⬜</div>
-              <p>Build or paste a KHQR to preview</p>
-            </div>
-
-            <div v-if="qrResult" class="gen-raw">
-              <div class="gen-raw-header">
-                <span>KHQR String</span>
-                <button @click="copyToClipboard" class="gen-copy-btn">{{ copyText }}</button>
+              <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['02']">
+                <span class="tree-tag">02</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['02'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag30Nested['02'].value }}</span>
+                <span class="tree-meaning">= Bank Name</span>
               </div>
-              <pre class="gen-raw-content">{{ qrResult }}</pre>
-            </div>
-
-            <div v-if="qrResult" class="result-section">
-              <div v-if="!headerInfo.merchantCategoryTag" class="mcc-warning-alert">
-                <span class="mcc-warning-icon">⚠️</span>
-                <div class="mcc-warning-content">
-                  <span class="mcc-warning-title">MCC Not Found</span>
-                  <span class="mcc-warning-desc">Tag 52 is missing. Add MCC for complete merchant classification.</span>
-                </div>
-                <button @click="toggleEditMode" class="mcc-warning-btn">Add MCC</button>
+              <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['10']">
+                <span class="tree-tag">10</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['10'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag30Nested['10'].value }}</span>
+                <span class="tree-meaning">= Account Number</span>
               </div>
-
-              <div class="summary-card">
-                <div class="summary-item">
-                  <span class="summary-label">Merchant</span>
-                  <span class="summary-value">{{ headerInfo.merchantNameTag?.value || '—' }}</span>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-label">Amount</span>
-                  <span class="summary-value">{{ headerInfo.amountTag?.value ? headerInfo.amountTag.value + ' ' + (headerInfo.currencyTag?.value === '840' ? 'USD' : 'KHR') : '—' }}</span>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-label">MCC</span>
-                  <span class="summary-value">
-                    <span v-if="headerInfo.merchantCategoryTag" class="mcc-badge mcc-badge-present">✓ {{ headerInfo.merchantCategoryTag.value }}</span>
-                    <span v-else class="mcc-badge mcc-badge-missing">✗ Missing</span>
-                  </span>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-label">Expiry</span>
-                  <span class="summary-value">
-                    <span v-if="headerInfo.timestampNested?.['01']" :class="getTimestampBadgeClass()">{{ getTimestampStatus() }}</span>
-                    <span v-else class="ts-badge ts-badge-none">—</span>
-                  </span>
-                </div>
-                <div class="summary-item">
-                  <span class="summary-label">Size</span>
-                  <span class="summary-value">{{ qrResult.length }} B · {{ Object.keys(parsedTLV).length }} tags</span>
-                </div>
-              </div>
-
-              <div class="result-header">
-                <h2>TLV Structure</h2>
-                <div class="header-buttons">
-                  <button v-if="editMode" @click="applyInlineEdits" class="copy-btn edit-apply-btn">✓ Apply</button>
-                  <button @click="toggleEditMode" class="copy-btn" :class="{ 'edit-active': editMode }">
-                    {{ editMode ? '✕ Cancel' : 'Edit' }}
-                  </button>
-                  <button v-if="!editMode" @click="copyToClipboard" class="copy-btn">{{ copyText }}</button>
-                  <div v-if="!editMode" class="tlv-dl-group">
-                    <select v-model="tlvDownloadFormat" class="tlv-dl-select">
-                      <option value="json">JSON</option>
-                      <option value="png">PNG</option>
-                      <option value="jpg">JPG</option>
-                    </select>
-                    <button @click="downloadTLV" class="copy-btn tlv-dl-btn">↓</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="tlv-tree">
-                <div class="tree-item" v-if="parsedTLV['00']">
-                  <span class="tree-tag">{{ parsedTLV['00'].tag }}</span>
-                  <span class="tree-length">{{ String(parsedTLV['00'].length).padStart(2, '0') }}</span>
-                  <span class="tree-data">{{ parsedTLV['00'].value }}</span>
-                  <span class="tree-meaning">Version</span>
-                </div>
-
-                <div class="tree-item" v-if="parsedTLV['01']">
-                  <span class="tree-tag">{{ parsedTLV['01'].tag }}</span>
-                  <span class="tree-length">{{ String((parsedTLV['01'].value||'').length).padStart(2,'0') }}</span>
-                  <input v-if="editMode" class="tree-edit-input tree-edit-input--short" v-model="parsedTLV['01'].value">
-                  <span v-else class="tree-data">{{ parsedTLV['01'].value }}</span>
-                  <span class="tree-meaning">{{ getInitiationMethodDescription(parsedTLV['01'].value) }}</span>
-                </div>
-
-                <div class="tree-item tree-parent" v-if="headerInfo.tag29">
-                  <span class="tree-tag">29</span>
-                  <span class="tree-length">{{ formatLength(headerInfo.tag29.length) }}</span>
-                  <span class="tree-meaning">Remittance</span>
-                  <div class="tree-sublayer" v-if="Object.keys(headerInfo.tag29Nested).length > 0">
-                    <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['00']">
-                      <span class="tree-tag">00</span><span class="tree-length">{{ String((headerInfo.tag29Nested['00'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag29Nested['00'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag29Nested['00'].value }}</span>
-                      <span class="tree-meaning">Bakong ID</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['01']">
-                      <span class="tree-tag">01</span><span class="tree-length">{{ String((headerInfo.tag29Nested['01'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag29Nested['01'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag29Nested['01'].value }}</span>
-                      <span class="tree-meaning">Merchant ID</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['02']">
-                      <span class="tree-tag">02</span><span class="tree-length">{{ String((headerInfo.tag29Nested['02'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag29Nested['02'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag29Nested['02'].value }}</span>
-                      <span class="tree-meaning">Bank Name</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['10']">
-                      <span class="tree-tag">10</span><span class="tree-length">{{ String((headerInfo.tag29Nested['10'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag29Nested['10'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag29Nested['10'].value }}</span>
-                      <span class="tree-meaning">Account Number</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['11']">
-                      <span class="tree-tag">11</span><span class="tree-length">{{ String((headerInfo.tag29Nested['11'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag29Nested['11'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag29Nested['11'].value }}</span>
-                      <span class="tree-meaning">Reference Number</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tree-item tree-parent" v-if="headerInfo.tag30">
-                  <span class="tree-tag">30</span>
-                  <span class="tree-length">{{ formatLength(headerInfo.tag30.length) }}</span>
-                  <span class="tree-meaning">Merchant Info</span>
-                  <div class="tree-sublayer" v-if="Object.keys(headerInfo.tag30Nested).length > 0">
-                    <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['00']">
-                      <span class="tree-tag">00</span><span class="tree-length">{{ String((headerInfo.tag30Nested['00'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag30Nested['00'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag30Nested['00'].value }}</span>
-                      <span class="tree-meaning">Bakong ID</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['01']">
-                      <span class="tree-tag">01</span><span class="tree-length">{{ String((headerInfo.tag30Nested['01'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag30Nested['01'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag30Nested['01'].value }}</span>
-                      <span class="tree-meaning">Merchant ID</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['02']">
-                      <span class="tree-tag">02</span><span class="tree-length">{{ String((headerInfo.tag30Nested['02'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag30Nested['02'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag30Nested['02'].value }}</span>
-                      <span class="tree-meaning">Bank Name</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['10']">
-                      <span class="tree-tag">10</span><span class="tree-length">{{ String((headerInfo.tag30Nested['10'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag30Nested['10'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag30Nested['10'].value }}</span>
-                      <span class="tree-meaning">Account Number</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['11']">
-                      <span class="tree-tag">11</span><span class="tree-length">{{ String((headerInfo.tag30Nested['11'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag30Nested['11'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag30Nested['11'].value }}</span>
-                      <span class="tree-meaning">Reference Number</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tree-item tree-parent" v-if="headerInfo.bankInfoTag">
-                  <span class="tree-tag">51</span>
-                  <span class="tree-length">{{ formatLength(headerInfo.bankInfoTag.length) }}</span>
-                  <span class="tree-meaning">Bank Info</span>
-                  <div class="tree-sublayer" v-if="Object.keys(headerInfo.bankInfoNested).length > 0">
-                    <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['00']">
-                      <span class="tree-tag">00</span><span class="tree-length">{{ String((headerInfo.bankInfoNested['00'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.bankInfoNested['00'].value">
-                      <span v-else class="tree-data">{{ headerInfo.bankInfoNested['00'].value }}</span>
-                      <span class="tree-meaning">Bakong ID</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['01']">
-                      <span class="tree-tag">01</span><span class="tree-length">{{ String((headerInfo.bankInfoNested['01'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.bankInfoNested['01'].value">
-                      <span v-else class="tree-data">{{ headerInfo.bankInfoNested['01'].value }}</span>
-                      <span class="tree-meaning">Merchant ID</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['02']">
-                      <span class="tree-tag">02</span><span class="tree-length">{{ String((headerInfo.bankInfoNested['02'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.bankInfoNested['02'].value">
-                      <span v-else class="tree-data">{{ headerInfo.bankInfoNested['02'].value }}</span>
-                      <span class="tree-meaning">Bank Name</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['10']">
-                      <span class="tree-tag">10</span><span class="tree-length">{{ String((headerInfo.bankInfoNested['10'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.bankInfoNested['10'].value">
-                      <span v-else class="tree-data">{{ headerInfo.bankInfoNested['10'].value }}</span>
-                      <span class="tree-meaning">Account Number</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['11']">
-                      <span class="tree-tag">11</span><span class="tree-length">{{ String((headerInfo.bankInfoNested['11'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.bankInfoNested['11'].value">
-                      <span v-else class="tree-data">{{ headerInfo.bankInfoNested['11'].value }}</span>
-                      <span class="tree-meaning">Reference Number</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tree-item" v-if="headerInfo.merchantCategoryTag" :class="{ 'mcc-tag-present': headerInfo.merchantCategoryTag }">
-                  <span class="tree-tag mcc-tag-highlight">52</span>
-                  <span class="tree-length">{{ String((headerInfo.merchantCategoryTag.value||'').length).padStart(2,'0') }}</span>
-                  <input v-if="editMode" class="tree-edit-input tree-edit-input--short" v-model="headerInfo.merchantCategoryTag.value">
-                  <span v-else class="tree-data">{{ headerInfo.merchantCategoryTag.value }}</span>
-                  <span class="tree-meaning">{{ getMerchantCategoryDescription(headerInfo.merchantCategoryTag.value) }}</span>
-                  <span class="mcc-indicator" v-if="!editMode">MCC ✓</span>
-                </div>
-
-                <div class="tree-item" v-if="headerInfo.currencyTag">
-                  <span class="tree-tag">53</span>
-                  <span class="tree-length">{{ String((headerInfo.currencyTag.value||'').length).padStart(2,'0') }}</span>
-                  <input v-if="editMode" class="tree-edit-input tree-edit-input--short" v-model="headerInfo.currencyTag.value">
-                  <span v-else class="tree-data">{{ headerInfo.currencyTag.value }}</span>
-                  <span class="tree-meaning">{{ getCurrencyDescription(headerInfo.currencyTag.value) }}</span>
-                </div>
-
-                <div class="tree-item" v-if="headerInfo.amountTag">
-                  <span class="tree-tag">54</span>
-                  <span class="tree-length">{{ String((headerInfo.amountTag.value||'').length).padStart(2,'0') }}</span>
-                  <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.amountTag.value">
-                  <span v-else class="tree-data">{{ headerInfo.amountTag.value }}</span>
-                  <span class="tree-meaning">Amount</span>
-                </div>
-
-                <div class="tree-item" v-if="headerInfo.countryTag">
-                  <span class="tree-tag">58</span>
-                  <span class="tree-length">{{ formatLength(headerInfo.countryTag.length) }}</span>
-                  <span class="tree-data">{{ headerInfo.countryTag.value }}</span>
-                  <span class="tree-meaning">{{ getCountryDescription(headerInfo.countryTag.value) }}</span>
-                </div>
-
-                <div class="tree-item" v-if="headerInfo.merchantNameTag">
-                  <span class="tree-tag">59</span>
-                  <span class="tree-length">{{ String((headerInfo.merchantNameTag.value||'').length).padStart(2,'0') }}</span>
-                  <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.merchantNameTag.value">
-                  <span v-else class="tree-data">{{ headerInfo.merchantNameTag.value }}</span>
-                  <span class="tree-meaning">Merchant Name</span>
-                </div>
-
-                <div class="tree-item" v-if="headerInfo.merchantCityTag">
-                  <span class="tree-tag">60</span>
-                  <span class="tree-length">{{ String((headerInfo.merchantCityTag.value||'').length).padStart(2,'0') }}</span>
-                  <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.merchantCityTag.value">
-                  <span v-else class="tree-data">{{ headerInfo.merchantCityTag.value }}</span>
-                  <span class="tree-meaning">Merchant City</span>
-                </div>
-
-                <div class="tree-item tree-parent" v-if="parsedTLV['62']">
-                  <span class="tree-tag">62</span>
-                  <span class="tree-length">{{ formatLength(parsedTLV['62'].length) }}</span>
-                  <span class="tree-meaning">Additional Data</span>
-                  <div class="tree-sublayer" v-if="Object.keys(headerInfo.tag62Nested).length > 0">
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['01']">
-                      <span class="tree-tag">01</span><span class="tree-length">{{ String((headerInfo.tag62Nested['01'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['01'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['01'].value }}</span>
-                      <span class="tree-meaning">Bill Number</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['02']">
-                      <span class="tree-tag">02</span><span class="tree-length">{{ String((headerInfo.tag62Nested['02'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['02'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['02'].value }}</span>
-                      <span class="tree-meaning">Mobile Number</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['03']">
-                      <span class="tree-tag">03</span><span class="tree-length">{{ String((headerInfo.tag62Nested['03'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['03'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['03'].value }}</span>
-                      <span class="tree-meaning">Store Label</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['04']">
-                      <span class="tree-tag">04</span><span class="tree-length">{{ String((headerInfo.tag62Nested['04'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['04'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['04'].value }}</span>
-                      <span class="tree-meaning">Loyalty Number</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['05']">
-                      <span class="tree-tag">05</span><span class="tree-length">{{ String((headerInfo.tag62Nested['05'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['05'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['05'].value }}</span>
-                      <span class="tree-meaning">Reference Label</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['06']">
-                      <span class="tree-tag">06</span><span class="tree-length">{{ String((headerInfo.tag62Nested['06'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['06'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['06'].value }}</span>
-                      <span class="tree-meaning">Customer Label</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['07']">
-                      <span class="tree-tag">07</span><span class="tree-length">{{ String((headerInfo.tag62Nested['07'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['07'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['07'].value }}</span>
-                      <span class="tree-meaning">Terminal Label</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['08']">
-                      <span class="tree-tag">08</span><span class="tree-length">{{ String((headerInfo.tag62Nested['08'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['08'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['08'].value }}</span>
-                      <span class="tree-meaning">Purpose of Transaction</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['09']">
-                      <span class="tree-tag">09</span><span class="tree-length">{{ String((headerInfo.tag62Nested['09'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" class="tree-edit-input" v-model="headerInfo.tag62Nested['09'].value">
-                      <span v-else class="tree-data">{{ headerInfo.tag62Nested['09'].value }}</span>
-                      <span class="tree-meaning">Consumer Data Request</span>
-                    </div>
-                    <!-- Payment system specific templates (sub-tags 50–99) -->
-                    <template v-for="(subtagData, subtag) in headerInfo.tag62Nested" :key="'tag62ps-' + subtag">
-                      <div class="tree-subitem-line tree-subitem-parent" v-if="parseInt(subtag) >= 50 && parseInt(subtag) <= 99">
-                        <span class="tree-tag">{{ subtag }}</span>
-                        <span class="tree-length">{{ String((subtagData.value||'').length).padStart(2,'0') }}</span>
-                        <span class="tree-meaning">Payment System Template</span>
-                        <div class="tree-sublayer tree-sublayer--deep" v-if="headerInfo.tag62PaymentSystemNested[subtag]">
-                          <div class="tree-subitem-line"
-                            v-for="(ssd, sst) in headerInfo.tag62PaymentSystemNested[subtag]"
-                            :key="'tag62pay-' + subtag + '-' + sst">
-                            <span class="tree-tag">{{ sst }}</span>
-                            <span class="tree-length">{{ String((ssd.value||'').length).padStart(2,'0') }}</span>
-                            <span class="tree-data">{{ ssd.value }}</span>
-                            <span class="tree-meaning">{{ getTag62PaymentSubtagMeaning(sst) }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </template>
-                    <!-- Unknown sub-tags (not 01–09, not 50–99) -->
-                    <template v-for="(subtagData, subtag) in headerInfo.tag62Nested" :key="'tag62unk-' + subtag">
-                      <div class="tree-subitem-line" v-if="!['01','02','03','04','05','06','07','08','09'].includes(subtag) && !(parseInt(subtag) >= 50 && parseInt(subtag) <= 99)">
-                        <span class="tree-tag">{{ subtag }}</span>
-                        <span class="tree-length">{{ String((subtagData.value||'').length).padStart(2,'0') }}</span>
-                        <input v-if="editMode" class="tree-edit-input" v-model="subtagData.value">
-                        <span v-else class="tree-data">{{ subtagData.value }}</span>
-                        <span class="tree-meaning">Additional Info</span>
-                      </div>
-                    </template>
-                  </div>
-                </div>
-
-                <div class="tree-item tree-parent" v-if="headerInfo.timestampTag" :class="getTimestampStatusClass()">
-                  <span class="tree-tag">99</span>
-                  <span class="tree-length">{{ formatLength(headerInfo.timestampTag.length) }}</span>
-                  <span class="tree-meaning">Timestamp</span>
-                  <span class="ts-tree-indicator">{{ getTimestampStatus() }}</span>
-                  <button v-if="editMode" class="ts-now-btn" @click="setTimestampNow">Now / +1d</button>
-                  <div class="tree-sublayer" v-if="Object.keys(headerInfo.timestampNested).length > 0">
-                    <div class="tree-subitem-line" v-if="headerInfo.timestampNested['00']">
-                      <span class="tree-tag">00</span>
-                      <span class="tree-length">{{ String((headerInfo.timestampNested['00'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" type="datetime-local"
-                        class="tree-edit-input tree-edit-input--dt"
-                        :value="msToDatetimeLocal(headerInfo.timestampNested['00'].value)"
-                        @change="headerInfo.timestampNested['00'].value = String(datetimeLocalToMs($event.target.value))">
-                      <span v-else class="tree-data">{{ headerInfo.timestampNested['00'].value }}</span>
-                      <span class="tree-meaning">Create Time</span>
-                    </div>
-                    <div class="tree-subitem-conversion" v-if="headerInfo.timestampNested['00']"
-                      :class="{ 'timestamp-expired': isTimestampExpired(headerInfo.timestampNested['00'].value) }">
-                      <span class="tree-meaning">→ {{ getTimestampReadableWithoutExpired(headerInfo.timestampNested['00'].value) }}</span>
-                    </div>
-                    <div class="tree-subitem-line" v-if="headerInfo.timestampNested['01']">
-                      <span class="tree-tag">01</span>
-                      <span class="tree-length">{{ String((headerInfo.timestampNested['01'].value||'').length).padStart(2,'0') }}</span>
-                      <input v-if="editMode" type="datetime-local"
-                        class="tree-edit-input tree-edit-input--dt"
-                        :value="msToDatetimeLocal(headerInfo.timestampNested['01'].value)"
-                        @change="headerInfo.timestampNested['01'].value = String(datetimeLocalToMs($event.target.value))">
-                      <span v-else class="tree-data">{{ headerInfo.timestampNested['01'].value }}</span>
-                      <span class="tree-meaning">Expiry Time</span>
-                    </div>
-                    <div class="tree-subitem-conversion" v-if="headerInfo.timestampNested['01']"
-                      :class="{ 'timestamp-expired': isTimestampExpired(headerInfo.timestampNested['01'].value), 'timestamp-valid': !isTimestampExpired(headerInfo.timestampNested['01'].value) }">
-                      <span class="tree-meaning">→ {{ getTimestampReadableWithoutExpired(headerInfo.timestampNested['01'].value) }}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="tree-item" v-if="parsedTLV['63']" :class="{ 'checksum-valid': !editMode && validateChecksum(qrResult) === true }">
-                  <span class="tree-tag">63</span>
-                  <span class="tree-length">04</span>
-                  <span v-if="editMode" class="tree-data crc-pending">— recalculated on apply</span>
-                  <span v-else class="tree-data">{{ parsedTLV['63'].value }}</span>
-                  <span class="tree-meaning">CRC-16/IBM-3740</span>
-                </div>
+              <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['11']">
+                <span class="tree-tag">11</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['11'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag30Nested['11'].value }}</span>
+                <span class="tree-meaning">= Reference Number</span>
               </div>
             </div>
+          </div>
 
-          </main>
+          <!-- Tag 51: Bank Info (nested) -->
+          <div class="tree-item tree-parent" v-if="headerInfo.bankInfoTag">
+            <span class="tree-tag">51</span>
+            <span class="tree-length">{{ formatLength(headerInfo.bankInfoTag.length) }}</span>
+            <span class="tree-meaning">= Bank Info</span>
 
+            <!-- Sub-layer for Tag 51 -->
+            <div class="tree-sublayer" v-if="Object.keys(headerInfo.bankInfoNested).length > 0">
+              <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['00']">
+                <span class="tree-tag">00</span>
+                <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['00'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.bankInfoNested['00'].value }}</span>
+                <span class="tree-meaning">= Bakong ID</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['01']">
+                <span class="tree-tag">01</span>
+                <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['01'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.bankInfoNested['01'].value }}</span>
+                <span class="tree-meaning">= Merchant ID</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['02']">
+                <span class="tree-tag">02</span>
+                <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['02'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.bankInfoNested['02'].value }}</span>
+                <span class="tree-meaning">= Bank Name</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['10']">
+                <span class="tree-tag">10</span>
+                <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['10'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.bankInfoNested['10'].value }}</span>
+                <span class="tree-meaning">= Account Number</span>
+              </div>
+              <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['11']">
+                <span class="tree-tag">11</span>
+                <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['11'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.bankInfoNested['11'].value }}</span>
+                <span class="tree-meaning">= Reference Number</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tag 52: Merchant Category -->
+          <div class="tree-item" v-if="headerInfo.merchantCategoryTag"
+            :class="{ 'mcc-tag-present': headerInfo.merchantCategoryTag }">
+            <span class="tree-tag mcc-tag-highlight">52</span>
+            <span class="tree-length">{{ formatLength(headerInfo.merchantCategoryTag.length) }}</span>
+            <span class="tree-data">{{ headerInfo.merchantCategoryTag.value }}</span>
+            <span class="tree-meaning">= {{ getMerchantCategoryDescription(headerInfo.merchantCategoryTag.value)
+              }}</span>
+            <span class="mcc-indicator">✓ MCC Present</span>
+          </div>
+
+          <!-- Tag 53: Currency -->
+          <div class="tree-item" v-if="headerInfo.currencyTag">
+            <span class="tree-tag">53</span>
+            <span class="tree-length">{{ formatLength(headerInfo.currencyTag.length) }}</span>
+            <span class="tree-data">{{ headerInfo.currencyTag.value }}</span>
+            <span class="tree-meaning">= {{ getCurrencyDescription(headerInfo.currencyTag.value) }}</span>
+          </div>
+
+          <!-- Tag 54: Amount -->
+          <div class="tree-item" v-if="headerInfo.amountTag">
+            <span class="tree-tag">54</span>
+            <span class="tree-length">{{ formatLength(headerInfo.amountTag.length) }}</span>
+            <span class="tree-data">{{ headerInfo.amountTag.value }}</span>
+            <span class="tree-meaning">= Amount</span>
+          </div>
+
+          <!-- Tag 58: Country -->
+          <div class="tree-item" v-if="headerInfo.countryTag">
+            <span class="tree-tag">58</span>
+            <span class="tree-length">{{ formatLength(headerInfo.countryTag.length) }}</span>
+            <span class="tree-data">{{ headerInfo.countryTag.value }}</span>
+            <span class="tree-meaning">= {{ getCountryDescription(headerInfo.countryTag.value) }}</span>
+          </div>
+
+          <!-- Tag 59: Merchant Name -->
+          <div class="tree-item" v-if="headerInfo.merchantNameTag">
+            <span class="tree-tag">59</span>
+            <span class="tree-length">{{ formatLength(headerInfo.merchantNameTag.length) }}</span>
+            <span class="tree-data">{{ headerInfo.merchantNameTag.value }}</span>
+            <span class="tree-meaning">= Merchant Name</span>
+          </div>
+
+          <!-- Tag 60: Merchant City -->
+          <div class="tree-item" v-if="headerInfo.merchantCityTag">
+            <span class="tree-tag">60</span>
+            <span class="tree-length">{{ formatLength(headerInfo.merchantCityTag.length) }}</span>
+            <span class="tree-data">{{ headerInfo.merchantCityTag.value }}</span>
+            <span class="tree-meaning">= Merchant City</span>
+          </div>
+
+          <!-- Tag 62: Additional Data (nested) -->
+          <div class="tree-item tree-parent" v-if="parsedTLV['62']">
+            <span class="tree-tag">62</span>
+            <span class="tree-length">{{ formatLength(parsedTLV['62'].length) }}</span>
+            <span class="tree-meaning">= Additional Data</span>
+
+            <!-- Sub-layer for Tag 62 -->
+            <div class="tree-sublayer" v-if="Object.keys(headerInfo.tag62Nested).length > 0">
+              <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['01']">
+                <span class="tree-tag">01</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['01'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag62Nested['01'].value }}</span>
+                <span class="tree-meaning">= Bill Number</span>
+              </div>
+
+              <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['02']">
+                <span class="tree-tag">02</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['02'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag62Nested['02'].value }}</span>
+                <span class="tree-meaning">= Mobile Number</span>
+              </div>
+
+              <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['03']">
+                <span class="tree-tag">03</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['03'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag62Nested['03'].value }}</span>
+                <span class="tree-meaning">= Store Label</span>
+              </div>
+
+              <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['07']">
+                <span class="tree-tag">07</span>
+                <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['07'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.tag62Nested['07'].value }}</span>
+                <span class="tree-meaning">= Terminal Number</span>
+              </div>
+
+              <!-- Display any other subtags not covered above -->
+              <div class="tree-subitem-line" v-for="(subtagData, subtag) in headerInfo.tag62Nested"
+                :key="'tag62-' + subtag" v-if="!['01', '02', '03', '07'].includes(subtag)">
+                <span class="tree-tag">{{ subtag }}</span>
+                <span class="tree-length">{{ formatLength(subtagData.length) }}</span>
+                <span class="tree-data">{{ subtagData.value }}</span>
+                <span class="tree-meaning">= Additional Info</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tag 99: Timestamp (nested) -->
+          <div class="tree-item tree-parent" v-if="headerInfo.timestampTag" :class="getTimestampStatusClass()">
+            <span class="tree-tag" :class="getTimestampStatusClass()">99</span>
+            <span class="tree-length">{{ formatLength(headerInfo.timestampTag.length) }}</span>
+            <span class="tree-meaning">= Timestamp</span>
+            <span class="ts-tree-indicator">{{ getTimestampStatus() }}</span>
+
+            <!-- Sub-layer for Tag 99 -->
+            <div class="tree-sublayer" v-if="Object.keys(headerInfo.timestampNested).length > 0">
+              <div class="tree-subitem-line" v-if="headerInfo.timestampNested['00']">
+                <span class="tree-tag">00</span>
+                <span class="tree-length">{{ formatLength(headerInfo.timestampNested['00'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.timestampNested['00'].value }}</span>
+                <span class="tree-meaning">= Create Time</span>
+              </div>
+              <div class="tree-subitem-conversion" v-if="headerInfo.timestampNested['00']"
+                :class="{ 'timestamp-expired': isTimestampExpired(headerInfo.timestampNested['00'].value) }">
+                <span class="tree-meaning">→ {{
+          getTimestampReadableWithoutExpired(headerInfo.timestampNested['00'].value) }}</span>
+              </div>
+
+              <div class="tree-subitem-line" v-if="headerInfo.timestampNested['01']">
+                <span class="tree-tag">01</span>
+                <span class="tree-length">{{ formatLength(headerInfo.timestampNested['01'].length) }}</span>
+                <span class="tree-data">{{ headerInfo.timestampNested['01'].value }}</span>
+                <span class="tree-meaning">= Expiry Time</span>
+              </div>
+              <div class="tree-subitem-conversion" v-if="headerInfo.timestampNested['01']"
+                :class="{ 'timestamp-expired': isTimestampExpired(headerInfo.timestampNested['01'].value), 'timestamp-valid': !isTimestampExpired(headerInfo.timestampNested['01'].value) }">
+                <span class="tree-meaning">→ {{
+          getTimestampReadableWithoutExpired(headerInfo.timestampNested['01'].value) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tag 63: Checksum -->
+          <div class="tree-item" v-if="parsedTLV['63']"
+            :class="{ 'checksum-valid': validateChecksum(qrResult) === true }">
+            <span class="tree-tag">{{ parsedTLV['63'].tag }}</span>
+            <span class="tree-length">{{ formatLength(parsedTLV['63'].length) }}</span>
+            <span class="tree-data">{{ parsedTLV['63'].value }}</span>
+            <span class="tree-meaning">= Checksum (CRC-16/IBM-3740)</span>
+            <a v-if="editMode" :href="getCRCCalculatorLink()" target="_blank" class="crc-link">
+              🔗 Verify CRC
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generate Tab -->
+      <div v-show="activeTab === 'generate'" class="tab-content">
+        <div class="input-area">
+          <div class="live-preview-toggle">
+            <label class="toggle-label">
+              <input type="checkbox" v-model="livePreview" class="toggle-checkbox">
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Live Preview</span>
+            </label>
+          </div>
+
+          <textarea v-model="qrDataToGenerate" placeholder="Enter KHQR data to generate QR code..." class="input-field"
+            style="height: 150px;"></textarea>
+
+          <div class="action-buttons">
+            <button @click="generateQRCode" class="btn btn-primary" v-if="!livePreview">
+              ✨ Generate QR
+            </button>
+            <button @click="downloadQRCode" v-if="generatedQRImage" class="btn btn-primary">
+              ⬇️ Download
+            </button>
+            <button @click="clearGenerate" class="btn btn-secondary">
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div v-if="generatedQRImage" class="generate-result">
+          <h3 class="data-label">Generated QR Code</h3>
+          <div class="qr-display-container">
+            <img :src="generatedQRImage" alt="Generated QR Code" class="qr-image" />
+          </div>
+
+          <div class="download-options">
+            <label class="download-label">Download Format:</label>
+            <select v-model="downloadFormat" class="download-select">
+              <option value="svg">🌐 SVG (Recommended)</option>
+              <option value="png">🖼️ PNG</option>
+              <option value="jpg">📷 JPG</option>
+            </select>
+            <button @click="downloadQRCode" class="btn btn-primary">
+              ⬇️ Download
+            </button>
+          </div>
+
+          <div class="qr-data-display">
+            <h4 class="data-label" style="margin-top: 1rem;">Data</h4>
+            <pre class="data-content">{{ qrDataToGenerate }}</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reference Tab -->
+      <div v-show="activeTab === 'reference'" class="tab-content reference-tab">
+        <div class="reference-container">
+          <div class="reference-section">
+            <h3 class="reference-title">🏦 Cambodian Banks (Tag 29/30/51)</h3>
+            <div class="reference-grid">
+              <div class="reference-item" v-for="bank in cambodianBanks" :key="bank">
+                <span class="bank-name">{{ bank }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="reference-section">
+            <h3 class="reference-title">🏷️ KHQR Tag Definitions</h3>
+            <div class="tag-definitions">
+              <div class="tag-def">
+                <span class="tag-code">00</span>
+                <span class="tag-desc">Payload Format Indicator - KHQR version</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">29</span>
+                <span class="tag-desc">Merchant Type - Remittance (bank account info)</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">30</span>
+                <span class="tag-desc">Merchant Type - Merchant (business info)</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">51</span>
+                <span class="tag-desc">Acquirer Merchant ID - Bank and merchant ID</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">52</span>
+                <span class="tag-desc">Merchant Category Code - Business type</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">53</span>
+                <span class="tag-desc">Currency Code - 840 (USD) or 116 (KHR)</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">54</span>
+                <span class="tag-desc">Payment Amount - Transaction value</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">58</span>
+                <span class="tag-desc">Country Code - KH (Cambodia)</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">59</span>
+                <span class="tag-desc">Merchant Name - Business name</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">60</span>
+                <span class="tag-desc">Merchant City - Business location</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">62</span>
+                <span class="tag-desc">Additional Data - Extra info (UDF, Bill ID, etc)</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">63</span>
+                <span class="tag-desc">CRC-16/IBM-3740 - Checksum for validation</span>
+              </div>
+              <div class="tag-def">
+                <span class="tag-code">99</span>
+                <span class="tag-desc">Timestamp - Transaction date/time</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="reference-section">
+            <h3 class="reference-title">💼 Merchant Category Codes (MCC)</h3>
+            <div class="mcc-search">
+              <input v-model="mccSearchFilter" type="text" placeholder="Search MCC by code or description..."
+                class="mcc-search-input">
+            </div>
+            <div class="mcc-list">
+              <div class="mcc-item" v-for="(desc, code) in filteredMCCMap" :key="code">
+                <span class="mcc-code">{{ code }}</span>
+                <span class="mcc-desc">{{ desc }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="reference-section">
+            <h3 class="reference-title">💱 Currency Codes</h3>
+            <div class="currency-grid">
+              <div class="currency-item">
+                <span class="curr-code">840</span>
+                <span class="curr-name">USD (US Dollar)</span>
+              </div>
+              <div class="currency-item">
+                <span class="curr-code">116</span>
+                <span class="curr-name">KHR (Cambodian Riel)</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -526,18 +675,23 @@ export default {
         tag29Nested: {},
         tag30Nested: {},
         tag62Nested: {},
-        tag62PaymentSystemNested: {},
       },
       parsedTLV: {},
       manualQRInput: '00020101021229530016cadikhppxxx@cadi011300100053357230212Canadia Bank52040000530384054031.05802KH5911SAT SOVANDY6010Phnom Penh993400131765174265143011317652606651436304F3F6',
       copyText: 'Copy',
+      activeTab: 'decode',
       generatedQRImage: null,
-      qrDataToGenerate: '',
+      qrDataToGenerate: '00020101021229530016cadikhppxxx@cadi011300100053357230212Canadia Bank52040000530384054031.05802KH5911SAT SOVANDY6010Phnom Penh993400131765174265143011317652606651436304F3F6',
       editMode: false,
-      originalQRResult: null,
+      editMerchantID: '',
+      editCurrency: 'KHR',
+      editAmount: '',
+      editMerchantName: '',
+      editMerchantCity: '',
+      editBankName: '',
+      editMCC: '',
       mccSearchInput: '',
       downloadFormat: 'svg',
-      tlvDownloadFormat: 'json',
       cambodianBanks: [
         'ABA Bank',
         'Canadia Bank',
@@ -549,8 +703,9 @@ export default {
         'Campu Bank',
         'Sabay Bank',
       ],
+      copiedItemId: null,
+      livePreview: true,
       mccSearchFilter: '',
-      showRef: false,
       sampleDataOptions: [
         {
           name: 'Static Merchant',
@@ -585,11 +740,13 @@ export default {
         '704': 'Vietnamese Dong (VND)',
       },
       merchantCategoryMap: {
+        // 0700-0999: Agricultural services
         '0742': 'Veterinary Services',
         '0743': 'Wine Producers',
         '0744': 'Champagne Producers',
         '0763': 'Agricultural Co-operatives',
         '0780': 'Landscaping and Horticultural Services',
+        // 1500-2999: Contracted services
         '1520': 'General Contractors - Residential and Commercial',
         '1711': 'Heating, Plumbing and Air-Conditioning Contractors',
         '1731': 'Electrical Contractors',
@@ -601,6 +758,7 @@ export default {
         '2741': 'Miscellaneous Publishing and Printing Services',
         '2791': 'Typesetting, Platemaking and Related Services',
         '2842': 'Specialty Cleaning, Polishing and Sanitation',
+        // 4000-4799: Transportation
         '4011': 'Railroads',
         '4111': 'Local and Suburban Commuter Passenger Transportation',
         '4112': 'Passenger Railways',
@@ -618,6 +776,7 @@ export default {
         '4722': 'Travel Agencies and Tour Operators',
         '4784': 'Tolls and Bridge Fees',
         '4789': 'Transportation Services - Not Elsewhere Classified',
+        // 4800-4999: Utilities
         '4812': 'Telecommunication Equipment and Telephone Sales',
         '4814': 'Telecommunication Services',
         '4816': 'Computer Network/Information Services',
@@ -625,6 +784,7 @@ export default {
         '4829': 'Wire Transfers and Money Orders',
         '4899': 'Cable and Other Pay Television Services',
         '4900': 'Utilities - Electric, Gas, Water and Sanitary',
+        // 5000-5599: Retail outlets
         '5013': 'Motor Vehicle Supplies and New Parts',
         '5021': 'Office and Commercial Furniture',
         '5039': 'Construction Materials - Not Elsewhere Classified',
@@ -669,6 +829,7 @@ export default {
         '5451': 'Dairies',
         '5462': 'Bakeries',
         '5499': 'Miscellaneous Food Shops',
+        // 5500-5599: Automobiles and vehicles
         '5511': 'Car and Truck Dealers - New and Used',
         '5521': 'Car and Truck Dealers - Used Only',
         '5531': 'Auto and Home Supply Outlets',
@@ -683,6 +844,7 @@ export default {
         '5592': 'Motor Home Dealers',
         '5598': 'Snowmobile Dealers',
         '5599': 'Miscellaneous Automotive Dealers',
+        // 5600-5699: Clothing outlets
         '5611': 'Men\'s and Boys\' Clothing and Accessory Shops',
         '5621': 'Women\'s Ready-to-wear Shops',
         '5631': 'Women\'s Accessory and Specialty Shops',
@@ -695,6 +857,7 @@ export default {
         '5697': 'Tailors, Seamstresses, Mending and Alterations',
         '5698': 'Wig and Toupee Shops',
         '5699': 'Miscellaneous Apparel and Accessory Shops',
+        // 5700-5999: Miscellaneous outlets
         '5712': 'Furniture, Home Furnishings and Equipment Shops',
         '5713': 'Floor Covering Services',
         '5714': 'Drapery, Window Covering and Upholstery Shops',
@@ -759,6 +922,7 @@ export default {
         '5997': 'Electric Razor Shops - Sales and Service',
         '5998': 'Tent and Awning Shops',
         '5999': 'Miscellaneous and Specialty Retail Outlets',
+        // 6000-7299: Service providers
         '6010': 'Financial Institutions - Manual Cash Disbursements',
         '6011': 'Financial Institutions - Automated Cash Disbursements',
         '6012': 'Financial Institutions - Merchandise and Services',
@@ -819,6 +983,7 @@ export default {
         '7641': 'Furniture Reupholstery, Repair and Refinishing',
         '7692': 'Welding Services',
         '7699': 'Miscellaneous Repair Shops and Related Services',
+        // 7800-7999: Amusement and entertainment
         '7800': 'Government Owned Lotteries',
         '7801': 'Government Licensed Online Casinos',
         '7802': 'Government-licensed Horse/Dog Racing',
@@ -840,6 +1005,7 @@ export default {
         '7997': 'Membership Clubs - Sports, Recreation, Athletic',
         '7998': 'Aquariums, Seaquariums and Dolphinariums',
         '7999': 'Recreation Services - Not Elsewhere Classified',
+        // 8000-8999: Professional services and membership organizations
         '8011': 'Doctors and Physicians - Not Elsewhere Classified',
         '8021': 'Dentists and Orthodontists',
         '8031': 'Osteopaths',
@@ -869,6 +1035,7 @@ export default {
         '8911': 'Architectural, Engineering and Surveying Services',
         '8931': 'Accounting, Auditing and Bookkeeping Services',
         '8999': 'Professional Services - Not Elsewhere Classified',
+        // 9200-9402: Government services
         '9211': 'Court Costs, Including Alimony and Child Support',
         '9222': 'Fines',
         '9223': 'Bail and Bond Payments',
@@ -898,13 +1065,16 @@ export default {
       if (!this.mccSearchFilter.trim()) {
         return this.merchantCategoryMap;
       }
+
       const filter = this.mccSearchFilter.toLowerCase();
       const filtered = {};
+
       Object.entries(this.merchantCategoryMap).forEach(([code, desc]) => {
         if (code.includes(filter) || desc.toLowerCase().includes(filter)) {
           filtered[code] = desc;
         }
       });
+
       return filtered;
     },
 
@@ -912,26 +1082,36 @@ export default {
       if (!this.mccSearchInput.trim()) {
         return this.merchantCategoryMap;
       }
+
       const filter = this.mccSearchInput.toLowerCase();
       const filtered = {};
+
       Object.entries(this.merchantCategoryMap).forEach(([code, desc]) => {
         if (code.includes(filter) || desc.toLowerCase().includes(filter)) {
           filtered[code] = desc;
         }
       });
+
       return filtered;
     },
-
   },
   mounted() {
-    document.addEventListener('paste', this.handleGlobalPaste);
     if (this.manualQRInput.trim()) {
-      this.decodeManualQR();
-      this.generateQRFromString(this.manualQRInput.trim());
+      this.$nextTick(() => {
+        this.decodeManualQR();
+      });
     }
+
+    if (this.qrDataToGenerate.trim()) {
+      this.$nextTick(() => {
+        this.generateQRCode();
+      });
+    }
+
+    document.addEventListener('paste', this.handleGlobalPaste);
   },
 
-  beforeUnmount() {
+  beforeDestroy() {
     document.removeEventListener('paste', this.handleGlobalPaste);
   },
 
@@ -939,10 +1119,14 @@ export default {
     manualQRInput(newValue) {
       if (newValue.trim()) {
         this.decodeManualQR();
-        this.generateQRFromString(newValue.trim());
       }
     },
 
+    qrDataToGenerate(newValue) {
+      if (newValue.trim() && this.livePreview) {
+        this.generateQRPreview();
+      }
+    },
   },
 
   methods: {
@@ -953,11 +1137,13 @@ export default {
     },
 
     handlePaste(event) {
-      event.preventDefault();
-      const text = (event.clipboardData || window.clipboardData).getData('text');
-      if (text && text.trim()) {
-        this.manualQRInput = text.trim();
-      }
+      this.$nextTick(() => {
+        if (this.manualQRInput.trim()) {
+          const pastedData = this.manualQRInput.trim();
+          this.processQRResult(pastedData);
+          this.showNotification('✅ QR data pasted and decoded!', 'success');
+        }
+      });
     },
 
     async pasteFromClipboard() {
@@ -983,12 +1169,18 @@ export default {
     },
 
     handleGlobalPaste(event) {
-      if (event.target.tagName === 'TEXTAREA' || event.target.tagName === 'INPUT') return;
       try {
         const clipboardData = event.clipboardData || window.clipboardData;
         const pastedText = clipboardData.getData('text');
+
         if (pastedText && pastedText.trim()) {
-          this.manualQRInput = pastedText.trim();
+          if (pastedText.includes('00') && (pastedText.includes('29') || pastedText.includes('30') || pastedText.includes('51'))) {
+            this.manualQRInput = pastedText.trim();
+            this.$nextTick(() => {
+              this.processQRResult(pastedText.trim());
+              this.showNotification('✅ QR data pasted and decoded!', 'success');
+            });
+          }
         }
       } catch (error) {
         console.log('Paste error:', error);
@@ -1043,13 +1235,6 @@ export default {
       if (this.parsedTLV['62']) {
         this.headerInfo.additionalDataTag = this.parsedTLV['62'];
         this.headerInfo.tag62Nested = this.parseTLVStructure(this.parsedTLV['62'].value);
-        this.headerInfo.tag62PaymentSystemNested = {};
-        for (const [st, data] of Object.entries(this.headerInfo.tag62Nested)) {
-          const stNum = parseInt(st, 10);
-          if (stNum >= 50 && stNum <= 99 && data.value) {
-            this.headerInfo.tag62PaymentSystemNested[st] = this.parseTLVStructure(data.value);
-          }
-        }
       }
 
       if (this.parsedTLV['63']) this.headerInfo.encryptionTag = this.parsedTLV['63'];
@@ -1082,6 +1267,7 @@ export default {
             const nextTag = dataString.substring(i, i + 2);
             const nextLenStr = dataString.substring(i + 2, i + 4);
             const nextLen = parseInt(nextLenStr, 10);
+
             if (/^\d{2}$/.test(nextTag) && !isNaN(nextLen) && nextLen > 0 && nextLen < 255 &&
               i + 4 + nextLen <= dataString.length) {
               const truncatedLength = i - position;
@@ -1100,7 +1286,12 @@ export default {
 
         const value = dataString.substring(position, position + length);
         position += length;
-        result[tag] = { tag, length, value };
+
+        result[tag] = {
+          tag,
+          length,
+          value,
+        };
       }
 
       return result;
@@ -1108,37 +1299,36 @@ export default {
 
     extractHeaderInfo(tlvData) {
       const info = {};
-      if (tlvData['00']) info.payloadIndicator = tlvData['00'];
-      if (tlvData['01']) info.initiationMethod = tlvData['01'];
-      if (tlvData['30']) info.merchantType = tlvData['30'];
+
+      if (tlvData['00']) {
+        info.payloadIndicator = tlvData['00'];
+      }
+
+      if (tlvData['01']) {
+        info.initiationMethod = tlvData['01'];
+      }
+
+      if (tlvData['30']) {
+        info.merchantType = tlvData['30'];
+      }
+
       return info;
     },
 
     clearData() {
       this.qrResult = '';
-      this.headerInfo = {
-        bankInfoNested: {},
-        timestampNested: {},
-        tag29Nested: {},
-        tag30Nested: {},
-        tag62Nested: {},
-        tag62PaymentSystemNested: {},
-      };
+      this.headerInfo = {};
       this.parsedTLV = {};
       this.manualQRInput = '';
       this.copyText = 'Copy';
     },
 
-    clearAll() {
-      this.clearData();
-      this.generatedQRImage = null;
-      this.qrDataToGenerate = '';
-    },
-
     copyToClipboard() {
       navigator.clipboard.writeText(this.qrResult).then(() => {
         this.copyText = 'Copied!';
-        setTimeout(() => { this.copyText = 'Copy'; }, 2000);
+        setTimeout(() => {
+          this.copyText = 'Copy';
+        }, 2000);
       });
     },
 
@@ -1147,69 +1337,165 @@ export default {
     },
 
     getInitiationMethodDescription(code) {
-      const methodMap = { '11': 'Static QR Code', '12': 'Dynamic QR Code' };
+      const methodMap = {
+        '11': 'Static QR Code',
+        '12': 'Dynamic QR Code',
+      };
       return methodMap[code] || `Initiation Method: ${code}`;
     },
 
     toggleEditMode() {
-      if (!this.editMode) {
-        this.originalQRResult = this.qrResult;
-        this.editMode = true;
+      this.editMode = !this.editMode;
+      if (this.editMode) {
+        // Initialize all edit fields from current data
+        this.editMerchantID = this.headerInfo.tag29Nested?.['01']?.value ||
+          this.headerInfo.tag30Nested?.['01']?.value ||
+          this.headerInfo.bankInfoNested?.['01']?.value || '';
+
+        this.editCurrency = this.headerInfo.currencyTag?.value === '840' ? 'USD' : 'KHR';
+
+        this.editAmount = this.headerInfo.amountTag?.value || '';
+
+        this.editMerchantName = this.headerInfo.merchantNameTag?.value || '';
+
+        this.editMerchantCity = this.headerInfo.merchantCityTag?.value || '';
+
+        this.editBankName = this.headerInfo.tag29Nested?.['02']?.value ||
+          this.headerInfo.tag30Nested?.['02']?.value ||
+          this.headerInfo.bankInfoNested?.['02']?.value || '';
+
+        this.editMCC = this.headerInfo.merchantCategoryTag?.value || '';
+
+        this.mccSearchInput = '';
       } else {
-        if (this.originalQRResult) {
-          this.processQRResult(this.originalQRResult);
-          this.generateQRFromString(this.originalQRResult);
-        }
-        this.editMode = false;
-        this.originalQRResult = null;
+        this.resetEditForm();
       }
     },
 
-    rebuildKHQR() {
-      const enc = (tag, value) => {
-        if (value == null || value === '') return '';
-        return tag + String(value.length).padStart(2, '0') + value;
-      };
-      const encNested = (tag, nestedObj) => {
-        let inner = '';
-        const sorted = Object.entries(nestedObj).sort(([a], [b]) => a.localeCompare(b));
-        for (const [st, data] of sorted) {
-          if (data && data.value) inner += enc(st, data.value);
-        }
-        return inner ? tag + String(inner.length).padStart(2, '0') + inner : '';
-      };
-      const p = this.parsedTLV;
-      const h = this.headerInfo;
-      let qr = '';
-      if (p['00']) qr += enc('00', p['00'].value);
-      if (p['01']) qr += enc('01', p['01'].value);
-      if (h.tag29 && Object.keys(h.tag29Nested).length) qr += encNested('29', h.tag29Nested);
-      if (h.tag30 && Object.keys(h.tag30Nested).length) qr += encNested('30', h.tag30Nested);
-      if (h.bankInfoTag && Object.keys(h.bankInfoNested).length) qr += encNested('51', h.bankInfoNested);
-      if (h.merchantCategoryTag) qr += enc('52', h.merchantCategoryTag.value);
-      if (h.currencyTag) qr += enc('53', h.currencyTag.value);
-      if (h.amountTag) qr += enc('54', h.amountTag.value);
-      if (h.countryTag) qr += enc('58', h.countryTag.value);
-      if (h.merchantNameTag) qr += enc('59', h.merchantNameTag.value);
-      if (h.merchantCityTag) qr += enc('60', h.merchantCityTag.value);
-      if (p['62'] && Object.keys(h.tag62Nested).length) qr += encNested('62', h.tag62Nested);
-      if (h.timestampTag && Object.keys(h.timestampNested).length) qr += encNested('99', h.timestampNested);
-      qr += '6304' + this.calculateCRC16(qr);
-      return qr;
-    },
+    updateMerchantData() {
+      if (!this.qrResult || !this.canUpdate()) {
+        this.showNotification('❌ Please fill in required fields', 'error');
+        return;
+      }
 
-    applyInlineEdits() {
       try {
-        const rebuilt = this.rebuildKHQR();
+        let updatedResult = this.qrResult;
+
+        // Update Merchant ID in Tag 29/30/51
+        if (this.editMerchantID) {
+          updatedResult = this.updateTag(updatedResult,
+            this.headerInfo.tag29Nested?.['01'] ||
+            this.headerInfo.tag30Nested?.['01'] ||
+            this.headerInfo.bankInfoNested?.['01'],
+            '01', this.editMerchantID);
+        }
+
+        // Update Currency (Tag 53)
+        if (this.headerInfo.currencyTag) {
+          const newCurrency = this.editCurrency === 'USD' ? '840' : '116';
+          const oldTag53 = '53' + String(this.headerInfo.currencyTag.length).padStart(2, '0') + this.headerInfo.currencyTag.value;
+          const newTag53 = '53' + '03' + newCurrency;
+          updatedResult = updatedResult.replace(oldTag53, newTag53);
+        }
+
+        // Update Amount (Tag 54)
+        if (this.editAmount && this.headerInfo.amountTag) {
+          updatedResult = this.updateTag(updatedResult,
+            this.headerInfo.amountTag, '54', this.editAmount, true);
+        }
+
+        // Update Merchant Name (Tag 59)
+        if (this.editMerchantName && this.headerInfo.merchantNameTag) {
+          updatedResult = this.updateTag(updatedResult,
+            this.headerInfo.merchantNameTag, '59', this.editMerchantName, true);
+        }
+
+        // Update Merchant City (Tag 60)
+        if (this.editMerchantCity && this.headerInfo.merchantCityTag) {
+          updatedResult = this.updateTag(updatedResult,
+            this.headerInfo.merchantCityTag, '60', this.editMerchantCity, true);
+        }
+
+        // Update Bank Name in Tag 29/30/51
+        if (this.editBankName) {
+          updatedResult = this.updateTag(updatedResult,
+            this.headerInfo.tag29Nested?.['02'] ||
+            this.headerInfo.tag30Nested?.['02'] ||
+            this.headerInfo.bankInfoNested?.['02'],
+            '02', this.editBankName);
+        }
+
+        // Update MCC (Tag 52)
+        if (this.editMCC && this.headerInfo.merchantCategoryTag) {
+          updatedResult = this.updateTag(updatedResult,
+            this.headerInfo.merchantCategoryTag, '52', this.editMCC);
+        }
+
+        // Remove old checksum
+        updatedResult = updatedResult.replace(/63\d{2}[A-F0-9a-f]{4}$/, '');
+
+        // Calculate and add new checksum
+        const newChecksum = this.calculateCRC16(updatedResult);
+        updatedResult = updatedResult + '63' + '04' + newChecksum;
+
+        this.manualQRInput = updatedResult;
+        this.processQRResult(updatedResult);
         this.editMode = false;
-        this.originalQRResult = null;
-        this.manualQRInput = rebuilt;
-        this.processQRResult(rebuilt);
-        this.generateQRFromString(rebuilt);
-        this.showNotification('✅ TLV updated · CRC recalculated', 'success');
-      } catch (e) {
-        this.showNotification('❌ Error rebuilding QR string', 'error');
+        this.mccSearchInput = '';
+
+        this.showNotification('✅ Data updated! Checksum encrypted with CRC-16/IBM-3740', 'success');
+      } catch (error) {
+        console.error('Update error:', error);
+        this.showNotification('❌ Error updating QR data', 'error');
       }
+    },
+
+    updateTag(qrString, tagData, tagNumber, newValue, useFullTag = false) {
+      if (!tagData) return qrString;
+
+      if (useFullTag) {
+        const oldTag = tagNumber + String(tagData.length).padStart(2, '0') + tagData.value;
+        const newTag = tagNumber + String(newValue.length).padStart(2, '0') + newValue;
+        return qrString.replace(oldTag, newTag);
+      } else {
+        const oldTag = tagNumber + String(tagData.length).padStart(2, '0') + tagData.value;
+        const newTag = tagNumber + String(newValue.length).padStart(2, '0') + newValue;
+        return qrString.replace(oldTag, newTag);
+      }
+    },
+
+    isValidAmount() {
+      if (!this.editAmount) return false;
+      return /^\d+(\.\d{1,2})?$/.test(this.editAmount);
+    },
+
+    validateAmount() {
+      // Only allow valid amount formats
+      this.editAmount = this.editAmount.replace(/[^0-9.]/g, '');
+      // Prevent multiple dots
+      const parts = this.editAmount.split('.');
+      if (parts.length > 2) {
+        this.editAmount = parts[0] + '.' + parts[1];
+      }
+    },
+
+    canUpdate() {
+      return this.editMerchantID &&
+        this.editMerchantName &&
+        this.editAmount &&
+        this.isValidAmount() &&
+        this.editMCC;
+    },
+
+    resetEditForm() {
+      this.editMerchantID = '';
+      this.editCurrency = 'KHR';
+      this.editAmount = '';
+      this.editMerchantName = '';
+      this.editMerchantCity = '';
+      this.editBankName = '';
+      this.editMCC = '';
+      this.mccSearchInput = '';
     },
 
     showNotification(message, type = 'info') {
@@ -1217,6 +1503,7 @@ export default {
       notification.className = `notification notification-${type}`;
       notification.textContent = message;
       document.body.appendChild(notification);
+
       setTimeout(() => {
         notification.style.opacity = '0';
         setTimeout(() => notification.remove(), 300);
@@ -1234,89 +1521,118 @@ export default {
 
     getTimestampReadableWithoutExpired(timestamp) {
       if (!timestamp) return '';
+
       let ms = parseInt(timestamp, 10);
       if (isNaN(ms)) return '';
+
       try {
         const date = new Date(ms);
         const options = {
-          year: 'numeric', month: 'short', day: 'numeric',
-          hour: '2-digit', minute: '2-digit', second: '2-digit',
-          timeZone: 'Asia/Bangkok',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          timeZone: 'Asia/Bangkok'
         };
         return date.toLocaleString('en-US', options) + ' ICT';
-      } catch { return ''; }
+      } catch {
+        return '';
+      }
     },
 
     isTimestampExpired(timestamp) {
       if (!timestamp) return false;
+
       let ms = parseInt(timestamp, 10);
       if (isNaN(ms)) return false;
+
       try {
-        return new Date(ms) < new Date();
-      } catch { return false; }
+        const date = new Date(ms);
+        const now = new Date();
+        return date < now;
+      } catch {
+        return false;
+      }
     },
 
     formatLength(length) {
       return String(length).padStart(2, '0');
     },
 
-    setTimestampNow() {
-      const now = Date.now();
-      const tomorrow = now + 24 * 60 * 60 * 1000;
-      if (this.headerInfo.timestampNested['00']) {
-        this.headerInfo.timestampNested['00'].value = String(now);
-      }
-      if (this.headerInfo.timestampNested['01']) {
-        this.headerInfo.timestampNested['01'].value = String(tomorrow);
-      }
-    },
-
-    msToDatetimeLocal(ms) {
-      if (!ms) return '';
-      const d = new Date(parseInt(ms, 10));
-      if (isNaN(d.getTime())) return '';
-      const p = n => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-    },
-
-    datetimeLocalToMs(str) {
-      if (!str) return '';
-      const ms = new Date(str).getTime();
-      return isNaN(ms) ? '' : String(ms);
-    },
-
     calculateCRC16(data) {
       let crc = 0x0000;
+
       for (let i = 0; i < data.length; i++) {
         const byte = data.charCodeAt(i);
         crc ^= (byte << 8);
+
         for (let j = 0; j < 8; j++) {
           crc <<= 1;
-          if (crc & 0x10000) crc ^= 0x1021;
+          if (crc & 0x10000) {
+            crc ^= 0x1021;
+          }
           crc &= 0xFFFF;
         }
       }
+
       return crc.toString(16).toUpperCase().padStart(4, '0');
     },
 
     validateChecksum(qrData) {
       const checksumMatch = qrData.match(/63\d{2}([A-Fa-f0-9]{4})$/);
       if (!checksumMatch) return null;
+
       const providedChecksum = checksumMatch[1].toUpperCase();
       const dataWithoutChecksum = qrData.replace(/63\d{2}[A-Fa-f0-9]{4}$/, '');
       const calculatedChecksum = this.calculateCRC16(dataWithoutChecksum);
+
       return providedChecksum === calculatedChecksum;
     },
 
     getCRCCalculatorLink() {
-      let qrWithoutChecksum = this.qrResult.replace(/63\d{2}[A-Fa-f0-9]{4}$/, '');
+      let qrWithoutChecksum = this.qrResult;
+      qrWithoutChecksum = qrWithoutChecksum.replace(/63\d{2}[A-Fa-f0-9]{4}$/, '');
       const encodedData = encodeURIComponent(qrWithoutChecksum);
       return `https://crccalc.com/?crc=${encodedData}&method=CRC-16/IBM-3740&datatype=ascii&outtype=hex`;
     },
 
+    generateQRPreview() {
+      if (this.livePreview && this.qrDataToGenerate.trim()) {
+        this.generateQRCode();
+      }
+    },
+
+    async generateQRCode() {
+      if (!this.qrDataToGenerate.trim()) {
+        alert('Please enter KHQR data to generate a QR code');
+        return;
+      }
+
+      try {
+        this.generatedQRImage = await QRCode.toDataURL(this.qrDataToGenerate.trim(), {
+          errorCorrectionLevel: 'H',
+          type: 'image/png',
+          quality: 0.95,
+          margin: 1,
+          width: 300,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+        });
+      } catch (error) {
+        console.error('Error generating QR code:', error);
+        alert('Failed to generate QR code. Please check the data format.');
+      }
+    },
+
     downloadQRCode() {
       if (!this.generatedQRImage) return;
+
       const link = document.createElement('a');
+
       if (this.downloadFormat === 'svg') {
         QRCode.toString(this.qrDataToGenerate.trim(), {
           errorCorrectionLevel: 'H',
@@ -1324,316 +1640,123 @@ export default {
           quality: 0.95,
           margin: 1,
           width: 300,
-          color: { dark: '#000000', light: '#FFFFFF' },
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
         }, (err, url) => {
-          if (err) { console.error('Error generating SVG:', err); return; }
+          if (err) {
+            console.error('Error generating SVG:', err);
+            return;
+          }
           link.href = url;
           link.download = `khqr-${Date.now()}.svg`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
         });
+      } else if (this.downloadFormat === 'jpg') {
+        link.href = this.generatedQRImage;
+        link.download = `khqr-${Date.now()}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       } else {
         link.href = this.generatedQRImage;
-        link.download = `khqr-${Date.now()}.${this.downloadFormat}`;
+        link.download = `khqr-${Date.now()}.png`;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
       }
     },
 
-    async generateQRFromString(str) {
-      if (!str) return;
-      try {
-        this.qrDataToGenerate = str;
-        this.generatedQRImage = await QRCode.toDataURL(str, {
-          errorCorrectionLevel: 'H',
-          type: 'image/png',
-          quality: 0.95,
-          margin: 1,
-          width: 300,
-          color: { dark: '#000000', light: '#FFFFFF' },
-        });
-      } catch (e) {
-        console.error('QR generation error:', e);
-      }
+    clearGenerate() {
+      this.qrDataToGenerate = '';
+      this.generatedQRImage = null;
     },
 
     calculateTimeDifference(timeDiff) {
       const totalSeconds = Math.floor(timeDiff / 1000);
+
       const weeks = Math.floor(totalSeconds / (7 * 24 * 60 * 60));
       const remainingAfterWeeks = totalSeconds % (7 * 24 * 60 * 60);
+
       const days = Math.floor(remainingAfterWeeks / (24 * 60 * 60));
       const remainingAfterDays = remainingAfterWeeks % (24 * 60 * 60);
+
       const hours = Math.floor(remainingAfterDays / (60 * 60));
       const remainingAfterHours = remainingAfterDays % (60 * 60);
+
       const minutes = Math.floor(remainingAfterHours / 60);
       const seconds = remainingAfterHours % 60;
+
       return { weeks, days, hours, minutes, seconds };
     },
 
     formatTimeDifference(weeks, days, hours, minutes, seconds) {
       const parts = [];
+
       if (weeks > 0) parts.push(`${weeks}w`);
       if (days > 0) parts.push(`${days}d`);
       if (hours > 0) parts.push(`${hours}h`);
       if (minutes > 0) parts.push(`${minutes}m`);
       if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
       return parts.join(' ');
     },
 
     getTimestampStatus() {
-      if (!this.headerInfo.timestampNested?.['01']) return '✗ Not Present';
+      if (!this.headerInfo.timestampNested?.['01']) {
+        return '✗ Not Present';
+      }
+
       const expiryTime = parseInt(this.headerInfo.timestampNested['01'].value, 10);
       const now = new Date().getTime();
-      if (isNaN(expiryTime)) return '⚠️ Invalid';
+
+      if (isNaN(expiryTime)) {
+        return '⚠️ Invalid';
+      }
+
       if (expiryTime > now) {
-        const { weeks, days, hours, minutes, seconds } = this.calculateTimeDifference(expiryTime - now);
-        return `✓ Valid (${this.formatTimeDifference(weeks, days, hours, minutes, seconds)} left)`;
+        const timeDiff = expiryTime - now;
+        const { weeks, days, hours, minutes, seconds } = this.calculateTimeDifference(timeDiff);
+        const formattedTime = this.formatTimeDifference(weeks, days, hours, minutes, seconds);
+        return `✓ Valid (${formattedTime} left)`;
       } else {
-        const { weeks, days, hours, minutes, seconds } = this.calculateTimeDifference(now - expiryTime);
-        return `✗ Expired (${this.formatTimeDifference(weeks, days, hours, minutes, seconds)} ago)`;
+        const timeDiff = now - expiryTime;
+        const { weeks, days, hours, minutes, seconds } = this.calculateTimeDifference(timeDiff);
+        const formattedTime = this.formatTimeDifference(weeks, days, hours, minutes, seconds);
+        return `✗ Expired (${formattedTime} ago)`;
       }
     },
 
     getTimestampStatusClass() {
-      if (!this.headerInfo.timestampNested?.['01']) return 'ts-missing';
+      if (!this.headerInfo.timestampNested?.['01']) {
+        return 'ts-missing';
+      }
+
       const expiryTime = parseInt(this.headerInfo.timestampNested['01'].value, 10);
       const now = new Date().getTime();
-      if (isNaN(expiryTime)) return 'ts-invalid';
+
+      if (isNaN(expiryTime)) {
+        return 'ts-invalid';
+      }
+
       return expiryTime > now ? 'ts-valid' : 'ts-expired';
     },
 
-    downloadTLV() {
-      if (this.tlvDownloadFormat === 'json') {
-        this.downloadTLVStructure();
-      } else {
-        this.downloadTLVImage(this.tlvDownloadFormat);
-      }
-    },
-
-    buildTLVLines() {
-      const lines = [];
-      const add = (tag, len, value, meaning, indent) =>
-        lines.push({ tag, len: String(len).padStart(2, '0'), value: value || '', meaning, indent: indent || 0 });
-      const addNested = (nested, meanings, indent) => {
-        for (const [st, data] of Object.entries(nested)) {
-          add(st, (data.value || '').length, data.value, meanings[st] || '', indent);
-        }
-      };
-      const p = this.parsedTLV;
-      const h = this.headerInfo;
-      const bankMeanings = { '00': 'Bakong ID', '01': 'Merchant ID', '02': 'Bank Name', '10': 'Account Number', '11': 'Reference Number' };
-      if (p['00']) add('00', p['00'].value.length, p['00'].value, 'Payload Format Indicator');
-      if (p['01']) add('01', p['01'].value.length, p['01'].value, 'Initiation Method');
-      if (h.tag29) { add('29', h.tag29.length, '', 'Remittance'); addNested(h.tag29Nested, bankMeanings, 1); }
-      if (h.tag30) { add('30', h.tag30.length, '', 'Merchant Info'); addNested(h.tag30Nested, bankMeanings, 1); }
-      if (h.bankInfoTag) { add('51', h.bankInfoTag.length, '', 'Bank Info'); addNested(h.bankInfoNested, bankMeanings, 1); }
-      if (h.merchantCategoryTag) add('52', h.merchantCategoryTag.value.length, h.merchantCategoryTag.value, 'MCC');
-      if (h.currencyTag) add('53', h.currencyTag.value.length, h.currencyTag.value, 'Currency');
-      if (h.amountTag) add('54', h.amountTag.value.length, h.amountTag.value, 'Amount');
-      if (h.countryTag) add('58', h.countryTag.value.length, h.countryTag.value, 'Country Code');
-      if (h.merchantNameTag) add('59', h.merchantNameTag.value.length, h.merchantNameTag.value, 'Merchant Name');
-      if (h.merchantCityTag) add('60', h.merchantCityTag.value.length, h.merchantCityTag.value, 'Merchant City');
-      if (p['62']) {
-        add('62', p['62'].length, '', 'Additional Data');
-        const t62m = { '01': 'Bill Number', '02': 'Mobile Number', '03': 'Store Label', '04': 'Loyalty Number', '05': 'Reference Label', '06': 'Customer Label', '07': 'Terminal Label', '08': 'Purpose of Transaction', '09': 'Consumer Data Request' };
-        for (const [st, data] of Object.entries(h.tag62Nested)) {
-          const n = parseInt(st, 10);
-          if (n >= 50 && n <= 99) {
-            add(st, (data.value || '').length, '', 'Payment System Template', 1);
-            if (h.tag62PaymentSystemNested[st]) {
-              addNested(h.tag62PaymentSystemNested[st], { '00': 'App ID', '01': 'Bill Number', '02': 'Terminal ID', '06': 'Reference' }, 2);
-            }
-          } else {
-            add(st, (data.value || '').length, data.value, t62m[st] || 'Additional Info', 1);
-          }
-        }
-      }
-      if (h.timestampTag) { add('99', h.timestampTag.length, '', 'Timestamp'); addNested(h.timestampNested, { '00': 'Create Time', '01': 'Expiry Time' }, 1); }
-      if (p['63']) add('63', 4, p['63'].value, 'CRC-16');
-      return lines;
-    },
-
-    downloadTLVImage(format) {
-      const lines = this.buildTLVLines();
-      const DPR = 2;
-      const W = 680;
-      const PAD_X = 12;
-      const ROW_H = 28;
-      const SUB_ROW_H = 22;
-      const INDENT_W = 20;
-      const PILL_H = 16;
-
-      const totalH = 8 + lines.reduce((s, l) => s + (l.indent === 0 ? ROW_H : SUB_ROW_H), 0) + 8;
-
-      const canvas = document.createElement('canvas');
-      canvas.width = W * DPR;
-      canvas.height = totalH * DPR;
-      const ctx = canvas.getContext('2d');
-      ctx.scale(DPR, DPR);
-
-      // White background
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, W, totalH);
-
-      const pill = (x, y, w, h, r, bg) => {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y);
-        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r);
-        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h);
-        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r);
-        ctx.quadraticCurveTo(x, y, x + r, y);
-        ctx.closePath();
-        ctx.fillStyle = bg;
-        ctx.fill();
-      };
-
-      const truncate = (ctx, text, maxW) => {
-        if (!text) return '';
-        let t = text;
-        while (t.length > 1 && ctx.measureText(t).width > maxW) t = t.slice(0, -1);
-        return t === text ? text : t.slice(0, -1) + '…';
-      };
-
-      let y = 8;
-      lines.forEach((line, idx) => {
-        const rowH = line.indent === 0 ? ROW_H : SUB_ROW_H;
-        const isTop = line.indent === 0;
-
-        // Row bottom border (matches border-bottom: 1px solid #f8fafc)
-        if (idx < lines.length - 1) {
-          ctx.fillStyle = '#f8fafc';
-          ctx.fillRect(0, y + rowH - 1, W, 1);
-        }
-
-        // Left bars — one 2px bar per indent level
-        for (let d = 1; d <= line.indent; d++) {
-          const barX = PAD_X + (d - 1) * INDENT_W + 8;
-          ctx.fillStyle = d === 1 ? '#e2e8f0' : '#cbd5e1';
-          ctx.fillRect(barX, y, 2, rowH);
-        }
-
-        const indentOffset = line.indent > 0 ? PAD_X + line.indent * INDENT_W + 10 : PAD_X + 6;
-        const midY = y + rowH / 2;
-        const pillY = midY - PILL_H / 2;
-        let x = indentOffset;
-
-        // Tag pill — #f1f5f9 bg, #334155 text
-        const TAG_W = 30;
-        pill(x, pillY, TAG_W, PILL_H, 3, '#f1f5f9');
-        ctx.font = `bold ${isTop ? 11 : 10}px "Monaco","Courier New",monospace`;
-        ctx.fillStyle = '#334155';
-        ctx.textAlign = 'center';
-        ctx.fillText(line.tag, x + TAG_W / 2, pillY + 11);
-        ctx.textAlign = 'left';
-        x += TAG_W + 4;
-
-        // Length pill — #f8fafc bg, #94a3b8 text
-        const LEN_W = 26;
-        pill(x, pillY, LEN_W, PILL_H, 3, '#f8fafc');
-        ctx.font = `${isTop ? 10 : 9}px "Monaco","Courier New",monospace`;
-        ctx.fillStyle = '#94a3b8';
-        ctx.textAlign = 'center';
-        ctx.fillText(line.len, x + LEN_W / 2, pillY + 11);
-        ctx.textAlign = 'left';
-        x += LEN_W + 6;
-
-        // Value — #0f172a, monospace
-        const maxValW = W - x - 160;
-        if (line.value) {
-          ctx.font = `${isTop ? 11 : 10}px "Monaco","Courier New",monospace`;
-          ctx.fillStyle = '#0f172a';
-          const valText = truncate(ctx, line.value, maxValW);
-          ctx.fillText(valText, x, midY + 4);
-          x += Math.min(ctx.measureText(line.value).width, maxValW) + 10;
-        }
-
-        // Meaning — italic, #94a3b8
-        if (line.meaning) {
-          ctx.font = `italic ${isTop ? 10 : 9}px sans-serif`;
-          ctx.fillStyle = '#94a3b8';
-          ctx.fillText(line.meaning, x, midY + 4);
-        }
-
-        y += rowH;
-      });
-
-      const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
-      const dataUrl = canvas.toDataURL(mime, 0.95);
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `khqr-tlv-${Date.now()}.${format}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    },
-
-    downloadTLVStructure() {
-      const buildTree = (nested) => {
-        const out = {};
-        for (const [tag, data] of Object.entries(nested)) {
-          out[tag] = { length: data.length ?? (data.value || '').length, value: data.value };
-        }
-        return out;
-      };
-      const h = this.headerInfo;
-      const export_ = {
-        khqrString: this.qrResult,
-        tags: {
-          ...(this.parsedTLV['00'] && { '00': { value: this.parsedTLV['00'].value, meaning: 'Payload Format Indicator' } }),
-          ...(this.parsedTLV['01'] && { '01': { value: this.parsedTLV['01'].value, meaning: 'Initiation Method' } }),
-          ...(h.tag29 && { '29': { meaning: 'Remittance', subtags: buildTree(h.tag29Nested) } }),
-          ...(h.tag30 && { '30': { meaning: 'Merchant Info', subtags: buildTree(h.tag30Nested) } }),
-          ...(h.bankInfoTag && { '51': { meaning: 'Bank Info', subtags: buildTree(h.bankInfoNested) } }),
-          ...(h.merchantCategoryTag && { '52': { value: h.merchantCategoryTag.value, meaning: 'MCC' } }),
-          ...(h.currencyTag && { '53': { value: h.currencyTag.value, meaning: 'Currency' } }),
-          ...(h.amountTag && { '54': { value: h.amountTag.value, meaning: 'Amount' } }),
-          ...(h.countryTag && { '58': { value: h.countryTag.value, meaning: 'Country Code' } }),
-          ...(h.merchantNameTag && { '59': { value: h.merchantNameTag.value, meaning: 'Merchant Name' } }),
-          ...(h.merchantCityTag && { '60': { value: h.merchantCityTag.value, meaning: 'Merchant City' } }),
-          ...(this.parsedTLV['62'] && {
-            '62': {
-              meaning: 'Additional Data',
-              subtags: {
-                ...buildTree(h.tag62Nested),
-                ...Object.fromEntries(
-                  Object.entries(h.tag62PaymentSystemNested).map(([st, nested]) => [
-                    st, { meaning: 'Payment System Template', subtags: buildTree(nested) },
-                  ])
-                ),
-              },
-            },
-          }),
-          ...(h.timestampTag && { '99': { meaning: 'Timestamp', subtags: buildTree(h.timestampNested) } }),
-          ...(this.parsedTLV['63'] && { '63': { value: this.parsedTLV['63'].value, meaning: 'CRC-16' } }),
-        },
-      };
-      const blob = new Blob([JSON.stringify(export_, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `khqr-tlv-${Date.now()}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    },
-
-    getTag62PaymentSubtagMeaning(st) {
-      const map = { '00': 'App ID', '01': 'Bill Number', '02': 'Terminal ID', '03': 'Store Label', '04': 'Loyalty', '05': 'Reference Label', '06': 'Reference' };
-      return map[st] || `Field ${st}`;
-    },
-
     getTimestampBadgeClass() {
-      if (!this.headerInfo.timestampNested?.['01']) return 'ts-badge ts-badge-none';
+      if (!this.headerInfo.timestampNested?.['01']) {
+        return 'ts-badge ts-badge-none';
+      }
+
       const expiryTime = parseInt(this.headerInfo.timestampNested['01'].value, 10);
       const now = new Date().getTime();
-      if (isNaN(expiryTime)) return 'ts-badge ts-badge-invalid';
+
+      if (isNaN(expiryTime)) {
+        return 'ts-badge ts-badge-invalid';
+      }
+
       return expiryTime > now ? 'ts-badge ts-badge-valid' : 'ts-badge ts-badge-expired';
     },
   },
@@ -1641,1149 +1764,1659 @@ export default {
 </script>
 
 <style scoped>
-*, *::before, *::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-/* ── App Shell ───────────────────────────────────── */
 .container {
   display: flex;
   min-height: 100vh;
-  background: #f1f5f9;
+  background: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
   width: 100vw;
+  margin: 0;
+  padding: 0;
 }
 
 .scanner-card {
+  background: white;
   width: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #f1f5f9;
+  border-radius: 0;
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.1);
+  margin: 0;
 }
 
-/* ── Header ──────────────────────────────────────── */
 .header {
-  height: 48px;
-  background: #0f172a;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0 1.25rem;
+  background: linear-gradient(135deg, #1e40af 0%, #0ea5e9 100%);
+  border-bottom: 4px solid #0284c7;
+  padding: 3rem 2.5rem;
+  text-align: left;
   position: sticky;
   top: 0;
-  z-index: 100;
-  flex-shrink: 0;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(30, 64, 175, 0.3);
+}
+
+.header-content {
+  max-width: 100%;
 }
 
 .title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #f8fafc;
-  letter-spacing: -0.2px;
+  font-size: 2.2rem;
+  font-weight: 900;
+  margin: 0;
+  color: #ffffff;
+  letter-spacing: -1px;
+  text-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
-.header-sub {
-  font-size: 0.78rem;
+.subtitle {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0.8rem 0 0 0;
   font-weight: 500;
-  color: #475569;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
-/* ── Layout ──────────────────────────────────────── */
+.tab-navigation {
+  display: flex;
+  gap: 0;
+  padding: 0 2.5rem;
+  background: linear-gradient(to right, #ffffff, #f8fafc);
+  border-bottom: 3px solid #dbeafe;
+  position: sticky;
+  top: 6.2rem;
+  z-index: 9;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.5rem 2.2rem;
+  background: none;
+  border: none;
+  border-bottom: 4px solid transparent;
+  color: #64748b;
+  font-weight: 800;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 0.3px;
+}
+
+.tab-button:hover {
+  color: #1e40af;
+  background: rgba(30, 64, 175, 0.04);
+}
+
+.tab-button.active {
+  color: #0ea5e9;
+  border-bottom-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.tab-icon {
+  font-size: 1.1rem;
+}
+
+.tab-text {
+  font-weight: 700;
+}
+
 .tab-content {
-  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-}
-
-.builder-layout {
-  display: grid;
-  grid-template-columns: 300px 1fr;
-  grid-template-rows: calc(100vh - 48px);
   flex: 1;
 }
 
-/* ── Left Panel ──────────────────────────────────── */
-.builder-left {
-  background: #ffffff;
-  border-right: 1px solid #e2e8f0;
-  overflow-y: auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-/* ── Paste Mode ──────────────────────────────────── */
-.paste-mode {
-  padding: 1.125rem;
-  flex: 1;
-  overflow-y: auto;
+.input-area {
+  padding: 2.8rem 2.5rem;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 3px solid #bae6fd;
 }
 
 .sample-selector {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
-  margin-bottom: 0.75rem;
+  gap: 1.5rem;
+  margin-bottom: 2.2rem;
+  padding: 1.8rem;
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 14px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+}
+
+.sample-selector:hover {
+  border-color: #0284c7;
+  background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
+  transform: translateY(-2px);
 }
 
 .sample-label {
-  font-size: 0.67rem;
-  font-weight: 700;
-  color: #94a3b8;
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #0c4a6e;
   white-space: nowrap;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .sample-select {
   flex: 1;
-  padding: 0.45rem 0.6rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 0.78rem;
+  padding: 1.1rem;
+  border: 2px solid #7dd3fc;
+  border-radius: 10px;
+  font-size: 15px;
   font-family: inherit;
-  color: #334155;
-  background: #ffffff;
+  color: #0c4a6e;
+  background: white;
   cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 800;
 }
 
+.sample-select:hover,
 .sample-select:focus {
+  border-color: #0284c7;
   outline: none;
-  border-color: #2563eb;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
 }
 
 .input-field {
   width: 100%;
-  height: 140px;
-  padding: 0.65rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  height: 120px;
+  padding: 1.2rem;
+  border: 2px solid #7dd3fc;
+  border-radius: 12px;
   font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.72rem;
+  font-size: 14px;
   resize: vertical;
-  color: #334155;
-  background: #ffffff;
-  transition: border-color 0.12s;
-  margin-bottom: 0.75rem;
-  line-height: 1.5;
+  transition: all 0.3s ease;
+  color: #0c4a6e;
+  background: linear-gradient(to bottom, #ffffff, #f0f9ff);
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.input-field:hover {
+  border-color: #06b6d4;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
 }
 
 .input-field:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
 }
 
 .input-field::placeholder {
-  color: #cbd5e1;
+  color: #7dd3fc;
+  font-weight: 500;
 }
 
 .action-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: 1.2rem;
+  margin-top: 1.5rem;
+  width: 100%;
 }
 
 .action-buttons .btn {
   flex: 1;
 }
 
-/* ── Buttons ─────────────────────────────────────── */
 .btn {
-  padding: 0.5rem 1rem;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.78rem;
+  padding: 1rem 2.2rem;
+  border: none;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  font-family: inherit;
-  letter-spacing: 0.1px;
-  white-space: nowrap;
+  transition: all 0.3s ease;
+  background: white;
+  color: #0c4a6e;
+  letter-spacing: 0px;
+}
+
+.btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.25);
+}
+
+.btn:active {
+  transform: translateY(0);
 }
 
 .btn-primary {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #2563eb;
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  font-weight: 800;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
+  background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 20px rgba(14, 165, 233, 0.4);
 }
 
-.btn-ghost {
-  background: transparent;
-  color: #64748b;
-  border-color: #e2e8f0;
+.btn-secondary {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  color: #0284c7;
+  border: 2px solid #7dd3fc;
+  font-weight: 800;
 }
 
-.btn-ghost:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-  color: #334155;
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+  border-color: #0284c7;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
 }
 
-/* ── Nav Copy Field ──────────────────────────────── */
-.nav-copy-field {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  margin: 0 0.75rem;
+.paste-btn {
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  font-weight: 900;
+  transition: all 0.3s ease;
 }
 
-.nav-copy-input {
-  flex: 1;
-  padding: 0.3rem 0.55rem;
-  border: 1px solid #334155;
-  border-right: none;
-  border-radius: 5px 0 0 5px;
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.63rem;
-  color: #cbd5e1;
-  background: #1e293b;
-  cursor: text;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+.paste-btn:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
+  box-shadow: 0 8px 16px rgba(14, 165, 233, 0.4);
+  transform: translateY(-2px);
 }
 
-.nav-copy-input:focus {
-  outline: none;
-  border-color: #475569;
-  background: #0f172a;
-  color: #f1f5f9;
-}
-
-.nav-copy-btn {
-  padding: 0.3rem 0.6rem;
-  background: #334155;
-  color: #f1f5f9;
-  border: 1px solid #334155;
-  border-radius: 0 5px 5px 0;
-  font-size: 0.68rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.12s;
-  font-family: inherit;
-  flex-shrink: 0;
-}
-
-.nav-copy-btn:hover {
-  background: #475569;
-  border-color: #475569;
-}
-
-/* ── Right Panel ─────────────────────────────────── */
-.builder-right {
-  overflow-y: auto;
-  padding: 1.125rem;
-  padding-bottom: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.875rem;
-  background: #f8fafc;
-  min-height: 0;
-}
-
-/* ── QR Preview ──────────────────────────────────── */
-.qr-output-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-
-.qr-preview-box {
-  display: flex;
-  justify-content: center;
-  padding: 1.25rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-}
-
-.qr-preview-img {
-  max-width: 200px;
-  height: auto;
-}
-
-.qr-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 2.5rem 1.25rem;
-  background: #ffffff;
-  border: 1.5px dashed #e2e8f0;
-  border-radius: 10px;
-}
-
-.qr-placeholder-icon {
-  font-size: 2rem;
-  opacity: 0.15;
-}
-
-.qr-placeholder p {
-  color: #94a3b8;
-  font-size: 0.78rem;
-  margin: 0;
-}
-
-.gen-dl {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.gen-dl-select {
-  padding: 0.42rem 0.6rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  font-family: inherit;
-  background: #ffffff;
-  color: #334155;
-  cursor: pointer;
-}
-
-/* ── Raw KHQR String ─────────────────────────────── */
-.gen-raw {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.gen-raw-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.4rem 0.65rem;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.gen-raw-header span {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.gen-copy-btn {
-  padding: 0.18rem 0.45rem;
-  background: #2563eb;
-  color: #ffffff;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s;
-  font-family: inherit;
-}
-
-.gen-copy-btn:hover {
-  background: #1d4ed8;
-}
-
-.gen-raw-content {
-  padding: 0.6rem 0.65rem;
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.63rem;
-  word-break: break-all;
-  white-space: pre-wrap;
-  color: #374151;
-  line-height: 1.6;
-  margin: 0;
-}
-
-/* ── Summary Card ────────────────────────────────── */
-.summary-card {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1px;
-  background: #e2e8f0;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.65rem 0.75rem;
-  background: #ffffff;
-}
-
-.summary-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.summary-value {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #0f172a;
-  word-break: break-word;
-}
-
-/* ── MCC Warning ─────────────────────────────────── */
-.mcc-warning-alert {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  padding: 0.625rem 0.875rem;
-  background: #fefce8;
-  border: 1px solid #fde047;
-  border-radius: 7px;
-}
-
-.mcc-warning-icon {
-  font-size: 1rem;
-  flex-shrink: 0;
-}
-
-.mcc-warning-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  flex: 1;
-}
-
-.mcc-warning-title {
-  font-weight: 600;
-  color: #854d0e;
-  font-size: 0.78rem;
-}
-
-.mcc-warning-desc {
-  color: #92400e;
-  font-size: 0.7rem;
-}
-
-.mcc-warning-btn {
-  padding: 0.3rem 0.65rem;
-  background: #ca8a04;
-  color: #ffffff;
-  border: none;
-  border-radius: 5px;
-  font-weight: 600;
-  font-size: 0.72rem;
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: inherit;
-}
-
-.mcc-warning-btn:hover {
-  background: #a16207;
-}
-
-/* ── Badges ──────────────────────────────────────── */
-.mcc-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.18rem 0.45rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.mcc-badge-present {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.mcc-badge-missing {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.ts-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.18rem 0.45rem;
-  border-radius: 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.ts-badge-valid {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.ts-badge-expired {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.ts-badge-invalid {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.ts-badge-none {
-  background: #f1f5f9;
-  color: #94a3b8;
-}
-
-/* ── Result Section ──────────────────────────────── */
 .result-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  padding: 2.8rem 2.5rem;
+  padding-bottom: 220px;
+  border-top: 3px solid #bae6fd;
+  overflow-y: auto;
+  background: linear-gradient(to bottom, #f0f9ff, #ffffff);
 }
 
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 2.2rem;
+  padding-bottom: 1.4rem;
+  border-bottom: 3px solid #7dd3fc;
 }
 
 .result-header h2 {
-  font-size: 0.67rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 1.5rem;
+  margin: 0;
+  color: #0c4a6e;
+  font-weight: 900;
+  letter-spacing: -0.6px;
 }
 
 .header-buttons {
   display: flex;
-  gap: 0.375rem;
+  gap: 1rem;
 }
 
 .copy-btn {
-  background: #ffffff;
-  color: #374151;
-  border: 1px solid #e2e8f0;
-  padding: 0.3rem 0.65rem;
-  border-radius: 5px;
-  font-size: 0.72rem;
-  font-weight: 600;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  color: #0284c7;
+  border: 2px solid #7dd3fc;
+  padding: 0.75rem 1.2rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 800;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  font-family: inherit;
+  transition: all 0.3s ease;
+  letter-spacing: 0px;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
 }
 
 .copy-btn:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
-}
-
-.tlv-dl-group {
-  display: flex;
-  align-items: center;
-}
-
-.tlv-dl-select {
-  padding: 0.28rem 0.4rem;
-  border: 1px solid #e2e8f0;
-  border-right: none;
-  border-radius: 5px 0 0 5px;
-  font-size: 0.68rem;
-  font-family: inherit;
-  background: #ffffff;
-  color: #374151;
-  cursor: pointer;
-}
-
-.tlv-dl-btn {
-  border-radius: 0 5px 5px 0 !important;
-  border-left: none !important;
-  padding: 0.3rem 0.5rem !important;
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  color: white;
+  border-color: #0284c7;
+  box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3);
+  transform: translateY(-2px);
 }
 
 .edit-active {
-  background: #fee2e2 !important;
-  color: #dc2626 !important;
-  border-color: #fca5a5 !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+  border-color: #dc2626 !important;
 }
 
-.edit-apply-btn {
-  background: #2563eb !important;
-  color: #ffffff !important;
-  border-color: #2563eb !important;
+.edit-panel {
+  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 16px;
+  padding: 2.4rem;
+  margin-bottom: 2.2rem;
+  animation: slideDown 0.4s ease;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.2);
 }
 
-.edit-apply-btn:hover {
-  background: #1d4ed8 !important;
-}
-
-/* ── TLV Tree ────────────────────────────────────── */
-.tlv-tree {
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.72rem;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.tree-item {
-  padding: 0.375rem 0.75rem;
+.edit-panel-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid rgba(14, 165, 233, 0.3);
+}
+
+.edit-panel-header h3 {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: #0c4a6e;
+  margin: 0;
+}
+
+.edit-info {
+  font-size: 0.85rem;
+  color: #0284c7;
+  font-weight: 600;
+}
+
+.edit-form-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.edit-field {
+  margin-bottom: 1.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.edit-field label {
+  font-weight: 900;
+  font-size: 0.9rem;
+  color: #0c4a6e;
+  letter-spacing: 0.2px;
+}
+
+.edit-field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: #16a34a;
+  font-weight: 600;
+  margin-top: 0.3rem;
+}
+
+.edit-field-error {
+  display: block;
+  font-size: 0.75rem;
+  color: #dc2626;
+  font-weight: 600;
+  margin-top: 0.3rem;
+}
+
+.mcc-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.edit-validation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border: 2px solid #7dd3fc;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  animation: slideUpIn 0.4s ease;
+}
+
+.validation-item {
+  display: flex;
   align-items: center;
-  border-bottom: 1px solid #f8fafc;
-  transition: background 0.1s;
-}
-
-.tree-item:last-child {
-  border-bottom: none;
-}
-
-.tree-item:hover {
-  background: #f8fafc;
-}
-
-.tree-tag {
-  background: #f1f5f9;
-  color: #334155;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
+  gap: 0.6rem;
+  padding: 0.8rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  font-size: 0.85rem;
   font-weight: 700;
-  font-size: 0.68rem;
-  min-width: 26px;
-  text-align: center;
+}
+
+.validation-item.valid {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #16a34a;
+  border: 1px solid #22c55e;
+}
+
+.validation-item.invalid {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.validation-icon {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.edit-input,
+.edit-select {
+  padding: 1rem;
+  border: 2px solid #7dd3fc;
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: #0c4a6e;
+  background: white;
+  transition: all 0.3s ease;
+  font-weight: 700;
+}
+
+.edit-input:hover,
+.edit-select:hover {
+  border-color: #06b6d4;
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
+}
+
+.edit-input:focus,
+.edit-select:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid rgba(14, 165, 233, 0.2);
+  flex-wrap: wrap;
+}
+
+.edit-update-btn {
+  flex: 1;
+  min-width: 200px;
+  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+  font-weight: 900;
+  font-size: 0.95rem;
+  padding: 1.1rem 2.2rem;
+  transition: all 0.3s ease;
+}
+
+.edit-update-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4);
+  transform: translateY(-3px);
+}
+
+.edit-update-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+}
+
+.edit-reset-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  font-weight: 900;
+  padding: 0.85rem 1.5rem;
+}
+
+.edit-reset-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #ca8a04 100%);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+  transform: translateY(-2px);
+}
+
+.edit-cancel-btn {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  color: #0284c7;
+  border: 2px solid #7dd3fc;
+  font-weight: 900;
+  padding: 0.85rem 1.5rem;
+}
+
+.edit-cancel-btn:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+  border-color: #0284c7;
+}
+
+.summary-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.3rem;
+  padding: 1.8rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 14px;
+  margin-bottom: 2rem;
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
+  animation: slideUpIn 0.5s ease;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.summary-label {
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: #0c4a6e;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.summary-value {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0284c7;
+  word-break: break-word;
+}
+
+/* MCC Highlight Styles */
+.mcc-warning-alert {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.5rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  animation: slideUpIn 0.4s ease;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+}
+
+.mcc-warning-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.mcc-warning-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.mcc-warning-title {
+  font-weight: 900;
+  color: #92400e;
+  font-size: 0.95rem;
   letter-spacing: 0.3px;
 }
 
-.tree-length {
-  background: #f8fafc;
-  color: #94a3b8;
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  font-size: 0.65rem;
-  min-width: 22px;
-  text-align: center;
+.mcc-warning-desc {
+  font-weight: 600;
+  color: #b45309;
+  font-size: 0.85rem;
 }
 
-.tree-data {
-  color: #0f172a;
-  font-size: 0.7rem;
-  word-break: break-all;
-  font-weight: 500;
+.mcc-warning-btn {
+  padding: 0.6rem 1.2rem;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 900;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
 }
 
-.tree-meaning {
-  color: #94a3b8;
-  font-size: 0.67rem;
-  font-style: italic;
-  margin-left: 0.2rem;
+.mcc-warning-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #ca8a04 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
 }
 
-/* TLV status */
-.mcc-tag-highlight {
-  background: #dcfce7 !important;
-  color: #16a34a !important;
+.mcc-present {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+  border-left: 4px solid #22c55e !important;
+  padding-left: 1rem !important;
 }
 
-.mcc-indicator {
-  margin-left: auto;
-  background: #dcfce7;
-  color: #16a34a;
-  padding: 0.1rem 0.35rem;
-  border-radius: 3px;
-  font-size: 0.62rem;
-  font-weight: 700;
+.mcc-missing {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
+  border-left: 4px solid #ef4444 !important;
+  padding-left: 1rem !important;
+}
+
+.mcc-badge {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
-.checksum-valid {
-  background: #f0fdf4;
+.mcc-badge-present {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  border: 2px solid #16a34a;
 }
 
+.mcc-badge-missing {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  border: 2px solid #dc2626;
+}
+
+/* Timestamp Styles */
 .ts-valid {
-  border-left: 2px solid #16a34a;
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+  border-left: 4px solid #22c55e !important;
+  padding-left: 1rem !important;
 }
 
 .ts-expired {
-  border-left: 2px solid #dc2626;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
+  border-left: 4px solid #ef4444 !important;
+  padding-left: 1rem !important;
 }
 
 .ts-invalid {
-  border-left: 2px solid #d97706;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  border-left: 4px solid #f59e0b !important;
+  padding-left: 1rem !important;
 }
 
 .ts-missing {
-  border-left: 2px solid #e2e8f0;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important;
+  border-left: 4px solid #9ca3af !important;
+  padding-left: 1rem !important;
+}
+
+.ts-badge {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.ts-badge-valid {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+  border: 2px solid #16a34a;
+}
+
+.ts-badge-expired {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  border: 2px solid #dc2626;
+}
+
+.ts-badge-invalid {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  border: 2px solid #d97706;
 }
 
 .ts-tree-indicator {
   margin-left: auto;
-  font-size: 0.62rem;
-  font-weight: 600;
-  font-style: normal;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-.ts-valid .ts-tree-indicator { color: #16a34a; }
-.ts-expired .ts-tree-indicator { color: #dc2626; }
-.ts-invalid .ts-tree-indicator { color: #d97706; }
+.ts-valid .ts-tree-indicator {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+}
 
-/* Sublayer */
+.ts-expired .ts-tree-indicator {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.ts-invalid .ts-tree-indicator {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: white;
+}
+
+.timestamp-valid {
+  background: #f0fdf4 !important;
+  border-color: #86efac !important;
+}
+
+.timestamp-valid .tree-meaning {
+  color: #16a34a !important;
+  font-weight: 700;
+}
+
+.live-preview-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding: 1.4rem;
+  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.12);
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  cursor: pointer;
+}
+
+.toggle-checkbox {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  background: #d0d0d0;
+  border-radius: 14px;
+  transition: background-color 0.3s ease;
+  border: 2px solid #7dd3fc;
+}
+
+.toggle-checkbox:checked+.toggle-switch {
+  background: #06b6d4;
+  border-color: #0284c7;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  background: white;
+  border-radius: 50%;
+  top: 1px;
+  left: 1px;
+  transition: left 0.3s ease;
+}
+
+.toggle-checkbox:checked+.toggle-switch::after {
+  left: 25px;
+}
+
+.toggle-text {
+  font-weight: 800;
+  color: #0c4a6e;
+  font-size: 0.95rem;
+}
+
+.tlv-tree {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.8rem;
+  line-height: 1.8;
+  background: white;
+  color: #000000;
+}
+
+.tree-item {
+  padding: 0.6rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  border-left: 3px solid transparent;
+  padding-left: 1rem;
+  transition: all 0.3s ease;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.tree-item:hover {
+  background-color: #f0f9ff;
+  border-left-color: #06b6d4;
+  padding-left: 1.2rem;
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.1);
+}
+
+.tree-tag {
+  background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%);
+  color: #0c4a6e;
+  padding: 0.35rem 0.6rem;
+  border: 2px solid #06b6d4;
+  font-weight: 800;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+}
+
+.mcc-tag-highlight {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  color: white !important;
+  border: 2px solid #16a34a !important;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4) !important;
+}
+
+.mcc-tag-present {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
+}
+
+.mcc-tag-present:hover {
+  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%) !important;
+}
+
+.mcc-indicator {
+  margin-left: auto;
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: white;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 900;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+}
+
+.tree-item:hover .tree-tag {
+  background: linear-gradient(135deg, #7dd3fc 0%, #06b6d4 100%);
+  color: white;
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+}
+
+.tree-length {
+  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
+  color: #0c4a6e;
+  padding: 0.35rem 0.6rem;
+  border: 2px solid #3b82f6;
+  font-weight: 800;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+}
+
+.tree-item:hover .tree-length {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: white;
+  transform: scale(1.08);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.tree-data {
+  background: linear-gradient(135deg, #86efac 0%, #4ade80 100%);
+  color: #ffffff;
+  padding: 0.35rem 0.6rem;
+  border: 2px solid #22c55e;
+  font-weight: 700;
+  border-radius: 4px;
+  word-break: break-all;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+}
+
+.tree-item:hover .tree-data {
+  background: linear-gradient(135deg, #4ade80 0%, #16a34a 100%);
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.tree-meaning {
+  color: #0284c7;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-style: italic;
+  margin-left: 0.8rem;
+}
+
 .tree-sublayer {
-  width: 100%;
-  margin-top: 0.35rem;
-  margin-left: 0.75rem;
-  border-left: 2px solid #e2e8f0;
-  padding-left: 0.625rem;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 0px;
+  width: 100%;
+  margin-left: 0.5rem;
+  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .tree-subitem-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.3rem;
   align-items: center;
-  padding: 0.25rem 0;
-}
-
-.tree-subitem-parent {
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.tree-subitem-parent .tree-sublayer--deep {
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid #000000;
+  border-radius: 0px;
   width: 100%;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeInUp 0.3s ease forwards;
 }
 
-.tree-sublayer--deep {
-  margin-left: 0.5rem;
-  border-left-color: #cbd5e1;
+.tree-subitem-line:hover {
+  background: #f9f9f9;
+  transform: translateX(3px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .tree-subitem-conversion {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 0.15rem 0;
-  padding-left: 1.25rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.7rem;
+  padding-left: 2.5rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 0px;
 }
 
 .tree-subitem-conversion .tree-meaning {
+  color: #0066cc;
   font-style: normal;
-  margin: 0;
-  color: #64748b;
+  font-weight: 600;
+  margin-left: 0;
 }
 
-.timestamp-expired .tree-meaning { color: #dc2626; }
-.timestamp-valid .tree-meaning { color: #16a34a; }
+.timestamp-expired {
+  background: #fef2f2 !important;
+  border-color: #ef4444 !important;
+}
 
-.crc-pending {
-  color: #94a3b8 !important;
-  font-style: italic;
+.timestamp-expired .tree-meaning {
+  color: #ef4444 !important;
 }
 
 .crc-link {
   margin-left: auto;
-  color: #2563eb;
+  color: #0066cc;
   text-decoration: none;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 0.15rem 0.4rem;
-  border: 1px solid #bfdbfe;
-  border-radius: 3px;
-  transition: all 0.12s;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #0066cc;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .crc-link:hover {
-  background: #2563eb;
-  color: #ffffff;
+  background: #0066cc;
+  color: white;
 }
 
-.tree-edit-input {
-  display: inline-block;
-  min-width: 80px;
-  max-width: 240px;
-  padding: 0.1rem 0.3rem;
-  border: 1px solid #bfdbfe;
-  border-radius: 3px;
-  font-family: inherit;
-  font-size: 0.7rem;
-  color: #0f172a;
-  background: #eff6ff;
-  outline: none;
+.checksum-valid {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  border-left-color: #22c55e !important;
 }
 
-.tree-edit-input:focus {
-  border-color: #2563eb;
+.generate-result {
+  padding: 1.25rem 1.5rem;
+  background: white;
+  overflow-y: auto;
 }
 
-.tree-edit-input--short {
-  min-width: 40px;
-  max-width: 70px;
-}
-
-.tree-edit-input--dt {
-  min-width: 180px;
-  max-width: 200px;
-  cursor: pointer;
-}
-
-.ts-now-btn {
-  margin-left: auto;
-  padding: 0.18rem 0.55rem;
-  background: #eff6ff;
-  color: #2563eb;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
-  font-size: 0.65rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s;
-}
-
-.ts-now-btn:hover {
-  background: #dbeafe;
-  border-color: #93c5fd;
-}
-
-/* ── Reference Trigger ───────────────────────────── */
-.ref-trigger {
-  margin-left: auto;
-  padding: 0.28rem 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
-  color: #94a3b8;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 5px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-  font-family: inherit;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-}
-
-.ref-trigger:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #e2e8f0;
-}
-
-/* ── Reference Overlay / Drawer ──────────────────── */
-.ref-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.4);
-  z-index: 200;
+.qr-display-container {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
+  align-items: center;
+  padding: 1.25rem;
+  background: white;
+  border: 1px solid #000000;
+  border-radius: 0px;
+  margin: 1rem 0;
 }
 
-.ref-drawer {
-  width: 420px;
-  max-width: 92vw;
-  background: #ffffff;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -4px 0 24px rgba(15, 23, 42, 0.12);
+.qr-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0px;
+  box-shadow: none;
 }
 
-.ref-drawer-header {
+.download-options {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 1.125rem;
-  height: 48px;
-  border-bottom: 1px solid #e2e8f0;
-  flex-shrink: 0;
-  background: #0f172a;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: #f5f5f5;
+  border: 1px solid #000000;
+  border-radius: 0px;
+  margin-bottom: 1rem;
 }
 
-.ref-drawer-title {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.ref-close {
-  background: none;
-  border: none;
-  color: #475569;
+.download-label {
   font-size: 0.85rem;
-  cursor: pointer;
-  padding: 0.25rem 0.4rem;
-  border-radius: 4px;
-  transition: background 0.1s, color 0.1s;
-  font-family: inherit;
+  font-weight: 600;
+  color: #000000;
+  white-space: nowrap;
 }
 
-.ref-close:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #e2e8f0;
-}
-
-.ref-drawer-body {
+.download-select {
   flex: 1;
-  overflow-y: auto;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.75rem;
+  padding: 0.5rem;
+  border: 1px solid #000000;
+  border-radius: 0px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #000000;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-/* ── Transition ──────────────────────────────────── */
-.ref-fade-enter-active,
-.ref-fade-leave-active {
-  transition: opacity 0.18s ease;
+.download-select:hover {
+  border-color: #000000;
 }
 
-.ref-fade-enter-active .ref-drawer,
-.ref-fade-leave-active .ref-drawer {
-  transition: transform 0.18s ease;
+.download-select:focus {
+  outline: none;
+  border-color: #000000;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
 }
 
-.ref-fade-enter-from,
-.ref-fade-leave-to {
-  opacity: 0;
+.qr-data-display {
+  margin-top: 1rem;
 }
 
-.ref-fade-enter-from .ref-drawer,
-.ref-fade-leave-to .ref-drawer {
-  transform: translateX(100%);
+.data-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #000000;
+  margin: 0 0 0.75rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.data-content {
+  background: white;
+  border: 1px solid #000000;
+  border-radius: 0px;
+  padding: 0.75rem;
+  margin: 0;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  word-break: break-all;
+  color: #000000;
+  font-family: 'Monaco', 'Courier New', monospace;
+  line-height: 1.4;
+  max-height: 200px;
+  transition: background-color 0.2s ease;
+}
+
+.reference-tab {
+  padding: 2.5rem 2rem;
+}
+
+.reference-container {
+  max-width: 100%;
 }
 
 .reference-section {
-  flex: 1;
-  min-width: 200px;
+  margin-bottom: 2.5rem;
+  animation: slideUpIn 0.5s ease;
 }
 
 .reference-title {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #94a3b8;
-  margin-bottom: 0.625rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #0c4a6e;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.5px;
 }
 
 .reference-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
 }
 
 .reference-item {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 5px;
-  padding: 0.25rem 0.55rem;
+  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 10px;
+  padding: 1.2rem;
+  transition: all 0.3s ease;
+}
+
+.reference-item:hover {
+  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
 }
 
 .bank-name {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 800;
+  color: #0284c7;
+  font-size: 0.95rem;
 }
 
 .tag-definitions {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 1rem;
 }
 
 .tag-def {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-left: 4px solid #0284c7;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  padding: 0.2rem 0.35rem;
-  border-radius: 4px;
+  gap: 1rem;
+  align-items: flex-start;
+  transition: all 0.3s ease;
 }
 
 .tag-def:hover {
-  background: #f8fafc;
+  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+  transform: translateX(4px);
 }
 
 .tag-code {
-  background: #f1f5f9;
-  color: #334155;
-  padding: 0.08rem 0.35rem;
-  border-radius: 3px;
-  font-weight: 700;
-  font-size: 0.68rem;
-  font-family: monospace;
-  min-width: 28px;
+  background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%);
+  color: #0c4a6e;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-weight: 900;
+  font-size: 0.9rem;
+  min-width: 50px;
   text-align: center;
 }
 
 .tag-desc {
-  color: #64748b;
-  font-size: 0.72rem;
+  flex: 1;
+  color: #0c4a6e;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .currency-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
 }
 
 .currency-item {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 0.4rem 0.65rem;
+  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 10px;
+  padding: 1rem;
   display: flex;
-  gap: 0.4rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: center;
 }
 
 .curr-code {
-  font-weight: 700;
-  color: #2563eb;
-  font-size: 0.78rem;
-  font-family: monospace;
+  font-weight: 900;
+  color: #0284c7;
+  font-size: 1.1rem;
 }
 
 .curr-name {
-  color: #64748b;
-  font-size: 0.75rem;
+  color: #0c4a6e;
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
+.notification {
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  padding: 1.2rem 1.8rem;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.notification-success {
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #166534;
+  border: 2px solid #22c55e;
+}
+
+.notification-info {
+  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+  color: #0c4a6e;
+  border: 2px solid #06b6d4;
+}
+
+.notification-error {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #991b1b;
+  border: 2px solid #ef4444;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-15px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUpIn {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* MCC Styles */
 .mcc-search {
-  margin-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
 }
 
 .mcc-search-input {
   width: 100%;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 5px;
-  font-size: 0.75rem;
+  padding: 1rem;
+  border: 2px solid #7dd3fc;
+  border-radius: 12px;
+  font-size: 15px;
   font-family: inherit;
-  color: #374151;
-  background: #ffffff;
+  color: #0c4a6e;
+  background: white;
+  transition: all 0.3s ease;
+  font-weight: 800;
 }
 
 .mcc-search-input:focus {
   outline: none;
-  border-color: #2563eb;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
 }
 
 .mcc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  max-height: 220px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.8rem;
+  max-height: 500px;
   overflow-y: auto;
 }
 
 .mcc-item {
-  display: flex;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #7dd3fc;
+  border-radius: 10px;
   align-items: center;
-  padding: 0.22rem 0.35rem;
-  border-radius: 3px;
+  transition: all 0.3s ease;
 }
 
 .mcc-item:hover {
-  background: #f8fafc;
+  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
 }
 
 .mcc-code {
-  font-weight: 700;
-  color: #2563eb;
-  font-size: 0.68rem;
-  font-family: monospace;
-  min-width: 34px;
-  flex-shrink: 0;
+  font-weight: 900;
+  color: #0284c7;
+  text-align: center;
+  font-size: 1rem;
+  font-family: 'Monaco', 'Courier New', monospace;
 }
 
 .mcc-desc {
-  color: #64748b;
-  font-size: 0.68rem;
-}
-
-/* ── Notifications ───────────────────────────────── */
-.notification {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  padding: 0.65rem 0.9rem;
-  border-radius: 7px;
+  color: #0c4a6e;
   font-weight: 600;
-  font-size: 0.78rem;
-  z-index: 9999;
-  animation: slideIn 0.2s ease;
-  transition: opacity 0.2s ease;
+  font-size: 0.9rem;
 }
 
-.notification-success {
-  background: #dcfce7;
-  color: #166534;
-  border: 1px solid #86efac;
-}
-
-.notification-info {
-  background: #eff6ff;
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
-}
-
-.notification-error {
-  background: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fca5a5;
-}
-
-/* ── Animations ──────────────────────────────────── */
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
-}
-
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0);    }
-}
-
-/* ── Responsive ──────────────────────────────────── */
-@media (max-width: 960px) {
-  .builder-layout {
-    grid-template-columns: 260px 1fr;
+/* Mobile Responsive */
+@media (max-width: 1200px) {
+  .tlv-tree {
+    font-size: 0.75rem;
   }
 }
 
-@media (max-width: 720px) {
-  .builder-layout {
+@media (max-width: 768px) {
+  * {
+    touch-action: manipulation;
+  }
+
+  .header {
+    padding: 1.5rem 1.2rem;
+    border-bottom: 3px solid #0284c7;
+  }
+
+  .title {
+    font-size: 1.6rem;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+  }
+
+  .tab-navigation {
+    padding: 0 0.8rem;
+    gap: 0;
+    top: 5rem;
+  }
+
+  .tab-button {
+    padding: 1rem 1rem;
+    font-size: 0.85rem;
+    gap: 0.4rem;
+    flex: 1;
+    justify-content: center;
+  }
+
+  .input-area {
+    padding: 1.5rem 1.2rem;
+  }
+
+  .sample-selector {
+    flex-direction: column;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .sample-label {
+    font-size: 0.9rem;
+    width: 100%;
+  }
+
+  .sample-select {
+    width: 100%;
+    padding: 0.9rem;
+    font-size: 15px;
+  }
+
+  .input-field {
+    height: 120px;
+    padding: 1rem;
+    font-size: 16px;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+  }
+
+  .action-buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .summary-card {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
+    gap: 1rem;
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
   }
 
-  .builder-left {
-    border-right: none;
-    border-bottom: 1px solid #e2e8f0;
-    max-height: 55vh;
+  .summary-item {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.8rem 0;
+    border-bottom: 1px solid rgba(14, 165, 233, 0.1);
   }
 
-  .builder-right {
-    max-height: 65vh;
+  .summary-item:last-child {
+    border-bottom: none;
   }
 
-  .ref-drawer {
-    width: 100vw;
-    max-width: 100vw;
+  .summary-label {
+    font-size: 0.8rem;
+  }
+
+  .summary-value {
+    font-size: 0.95rem;
+  }
+
+  .live-preview-toggle {
+    padding: 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .result-section {
+    padding: 1.5rem 1.2rem;
+    padding-bottom: 200px;
+  }
+
+  .result-header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .result-header h2 {
+    font-size: 1.3rem;
+    width: 100%;
+  }
+
+  .header-buttons {
+    width: 100%;
+    display: flex;
+    gap: 0.8rem;
+  }
+
+  .copy-btn {
+    padding: 0.8rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 8px;
+    flex: 1;
+  }
+
+  .edit-panel {
+    padding: 1.5rem 1.2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .edit-field {
+    margin-bottom: 1.5rem;
+  }
+
+  .edit-field label {
+    font-size: 0.9rem;
+  }
+
+  .edit-input,
+  .edit-select {
+    padding: 0.9rem;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+
+  .edit-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding-top: 1.2rem;
+  }
+
+  .edit-update-btn,
+  .edit-cancel-btn {
+    width: 100%;
+    padding: 1rem 1.2rem;
+  }
+
+  .tree-item {
+    padding: 0.7rem 0;
+    gap: 0.4rem;
+  }
+
+  .tree-tag,
+  .tree-length,
+  .tree-data {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .tree-meaning {
+    font-size: 0.7rem;
+    margin-left: 0.4rem;
+  }
+
+  .mcc-list {
+    max-height: 400px;
+  }
+
+  .mcc-item {
+    grid-template-columns: 80px 1fr;
+    gap: 0.8rem;
+    padding: 0.8rem;
+  }
+
+  .mcc-code {
+    font-size: 0.9rem;
+  }
+
+  .mcc-desc {
+    font-size: 0.85rem;
+  }
+
+  .reference-tab {
+    padding: 1.5rem 1.2rem;
+  }
+
+  .reference-grid,
+  .currency-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .notification {
+    right: 15px;
+    top: 20px;
+    padding: 1rem 1.2rem;
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 1.2rem 1rem;
+  }
+
+  .title {
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    font-size: 0.75rem;
+  }
+
+  .tab-button {
+    padding: 0.85rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .input-area {
+    padding: 1.2rem 1rem;
+  }
+
+  .sample-selector {
+    padding: 1rem;
+  }
+
+  .input-field {
+    height: 100px;
+    padding: 0.9rem;
+  }
+
+  .btn {
+    padding: 0.85rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .summary-card {
+    padding: 1rem;
+    gap: 0.8rem;
+  }
+
+  .result-section {
+    padding: 1.2rem 1rem;
+  }
+
+  .result-header h2 {
+    font-size: 1.2rem;
+  }
+
+  .edit-panel {
+    padding: 1.2rem 1rem;
+  }
+
+  .notification {
+    right: 10px;
+    top: 15px;
+    padding: 0.9rem 1rem;
+    font-size: 0.8rem;
   }
 }
 </style>
