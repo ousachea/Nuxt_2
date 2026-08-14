@@ -1,60 +1,148 @@
 <template>
   <div class="container">
     <div class="scanner-card">
-      <div class="header">
-        <div class="header-content">
-          <h1 class="title">🇰🇭 KHQR Scanner</h1>
-          <p class="subtitle">Decode and generate Cambodian payment QR codes</p>
+      <div class="sticky-head">
+        <div class="header">
+          <div class="shell">
+            <div class="header-content">
+              <h1 class="title">KHQR Scanner</h1>
+              <p class="subtitle">Decode and generate Cambodian payment QR codes</p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="tab-navigation">
-        <button @click="activeTab = 'decode'" :class="['tab-button', { active: activeTab === 'decode' }]">
-          <span class="tab-icon">🔍</span>
-          <span class="tab-text">Decode</span>
-        </button>
-        <button @click="activeTab = 'generate'" :class="['tab-button', { active: activeTab === 'generate' }]">
-          <span class="tab-icon">✨</span>
-          <span class="tab-text">Generate</span>
-        </button>
-        <button @click="activeTab = 'reference'" :class="['tab-button', { active: activeTab === 'reference' }]">
-          <span class="tab-icon">📚</span>
-          <span class="tab-text">Reference</span>
-        </button>
+        <div class="tab-navigation">
+          <div class="shell tab-shell">
+            <button @click="activeTab = 'decode'" :class="['tab-button', { active: activeTab === 'decode' }]">
+              <Icon name="lucide:scan-line" class="tab-icon" aria-hidden="true" />
+              <span class="tab-text">Decode</span>
+            </button>
+            <button @click="activeTab = 'generate'" :class="['tab-button', { active: activeTab === 'generate' }]">
+              <Icon name="lucide:qr-code" class="tab-icon" aria-hidden="true" />
+              <span class="tab-text">Generate</span>
+            </button>
+            <button @click="activeTab = 'reference'" :class="['tab-button', { active: activeTab === 'reference' }]">
+              <Icon name="lucide:book-open" class="tab-icon" aria-hidden="true" />
+              <span class="tab-text">Reference</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Decode Tab -->
-      <div v-show="activeTab === 'decode'" class="tab-content">
+      <Transition name="tab">
+      <div v-if="activeTab === 'decode'" class="tab-content">
         <div class="input-area">
-          <div class="sample-selector">
-            <label class="sample-label">📋 Sample Data:</label>
-            <select @change="loadSampleData" class="sample-select">
-              <option value="">-- Select Sample --</option>
-              <option v-for="sample in sampleDataOptions" :key="sample.name" :value="sample.data">
-                {{ sample.name }}
-              </option>
-            </select>
+          <div class="shell">
+            <div class="sample-selector">
+              <label class="sample-label" for="sample-select">
+                <Icon name="lucide:list" aria-hidden="true" />
+                Sample data
+              </label>
+              <select id="sample-select" @change="loadSampleData" class="sample-select">
+                <option value="">Select a sample…</option>
+                <option v-for="sample in sampleDataOptions" :key="sample.name" :value="sample.data">
+                  {{ sample.name }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Image / camera input. `qr-scanner` was a dead import before. -->
+            <div class="scan-zone" :class="{ 'is-dragging': dragOver, 'is-busy': scanBusy }"
+              @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="onDrop">
+              <Icon name="lucide:image-down" class="scan-zone-icon" aria-hidden="true" />
+              <p class="scan-zone-text">
+                <strong>Drop a QR image here</strong>, paste a screenshot, or
+              </p>
+              <div class="scan-zone-actions">
+                <label class="btn btn-secondary scan-file-btn">
+                  <Icon name="lucide:folder-open" aria-hidden="true" />
+                  Choose image
+                  <input type="file" accept="image/*" class="visually-hidden" @change="onFilePicked">
+                </label>
+                <button @click="toggleCamera" class="btn btn-secondary">
+                  <Icon :name="cameraOn ? 'lucide:camera-off' : 'lucide:camera'" aria-hidden="true" />
+                  {{ cameraOn ? 'Stop camera' : 'Use camera' }}
+                </button>
+              </div>
+              <p v-if="scanBusy" class="scan-zone-status">Reading image…</p>
+              <p v-if="cameraError" class="scan-zone-error">{{ cameraError }}</p>
+            </div>
+
+            <div v-show="cameraOn" class="camera-wrap">
+              <video ref="video" class="camera-video" muted playsinline></video>
+            </div>
+
+            <label class="field-label" for="qr-payload">Or paste the payload directly</label>
+            <textarea id="qr-payload" v-model="manualQRInput" @paste="handlePaste" placeholder="00020101…"
+              class="input-field"></textarea>
+
+            <div class="action-buttons">
+              <button @click="pasteFromClipboard" class="btn btn-primary paste-btn">
+                <Icon name="lucide:clipboard" aria-hidden="true" />
+                Paste from clipboard
+              </button>
+              <button @click="clearData" class="btn btn-secondary">
+                Clear
+              </button>
+            </div>
           </div>
+        </div>
 
-          <textarea v-model="manualQRInput" @paste="handlePaste" placeholder="Paste QR code data..."
-            class="input-field"></textarea>
-
-          <div class="action-buttons">
-            <button @click="pasteFromClipboard" class="btn btn-primary paste-btn">
-              📋 Paste from Clipboard
-            </button>
-            <button @click="clearData" class="btn btn-secondary">
-              Clear
-            </button>
+        <!-- Empty state: before this, the tab was an input box above a void. -->
+        <div v-if="!qrResult" class="empty-state">
+          <div class="shell empty-state-inner">
+            <Icon name="lucide:scan-line" class="empty-state-icon" aria-hidden="true" />
+            <h2 class="empty-state-title">No QR data yet</h2>
+            <p class="empty-state-body">
+              Paste a KHQR payload above, or pick one of the samples, to see its
+              tag-length-value structure broken down and its checksum verified.
+            </p>
           </div>
         </div>
       </div>
+      </Transition>
 
       <!-- Results - TLV Tree Structure -->
-      <div v-if="qrResult && activeTab === 'decode'" class="result-section">
+      <div v-if="qrResult && activeTab === 'decode'" class="result-section shell">
+        <!-- Checksum verdict. This is the single most important question about
+             a payment QR, and it used to be a faint tint on one row. -->
+        <div v-if="checksumInfo()" class="verdict" :class="'verdict-' + checksumInfo().state">
+          <Icon
+            :name="checksumInfo().state === 'valid' ? 'lucide:shield-check' : checksumInfo().state === 'invalid' ? 'lucide:shield-alert' : 'lucide:shield-question'"
+            class="verdict-icon" aria-hidden="true" />
+          <div class="verdict-content">
+            <span class="verdict-title">
+              {{ checksumInfo().state === 'valid' ? 'Checksum valid' : checksumInfo().state === 'invalid' ? 'Checksum does not match' : 'No checksum present' }}
+            </span>
+            <span class="verdict-desc" v-if="checksumInfo().state === 'invalid'">
+              Payload carries <code>{{ checksumInfo().provided }}</code> but the data computes to
+              <code>{{ checksumInfo().expected }}</code>. A bank app will reject this code.
+            </span>
+            <span class="verdict-desc" v-else-if="checksumInfo().state === 'valid'">
+              CRC-16/IBM-3740 over the payload matches tag 63.
+            </span>
+            <span class="verdict-desc" v-else>
+              Tag 63 is missing, so this payload cannot be verified.
+            </span>
+          </div>
+          <button @click="copyShareLink" class="verdict-btn">
+            <Icon name="lucide:link" aria-hidden="true" />
+            Share
+          </button>
+        </div>
+
+        <!-- Parser diagnostics. Malformed input used to fail silently. -->
+        <div v-if="parseIssues.length" class="issues" role="alert">
+          <div v-for="(issue, i) in parseIssues" :key="i" class="issue" :class="'issue-' + issue.level">
+            <Icon :name="issue.level === 'error' ? 'lucide:circle-x' : 'lucide:triangle-alert'" aria-hidden="true" />
+            <span>{{ issue.message }}</span>
+          </div>
+        </div>
+
         <!-- MCC Warning Alert -->
         <div v-if="!headerInfo.merchantCategoryTag" class="mcc-warning-alert">
-          <span class="mcc-warning-icon">⚠️</span>
+          <Icon name="lucide:triangle-alert" class="mcc-warning-icon" aria-hidden="true" />
           <div class="mcc-warning-content">
             <span class="mcc-warning-title">Merchant Category Code (MCC) Not Found</span>
             <span class="mcc-warning-desc">Tag 52 is missing. Consider adding MCC in edit mode for complete merchant
@@ -79,10 +167,12 @@
             <span class="summary-label">Category (MCC):</span>
             <span class="summary-value">
               <span v-if="headerInfo.merchantCategoryTag" class="mcc-badge mcc-badge-present">
-                ✓ {{ headerInfo.merchantCategoryTag.value }}
+                <Icon name="lucide:check" aria-hidden="true" />
+                {{ headerInfo.merchantCategoryTag.value }}
               </span>
               <span v-else class="mcc-badge mcc-badge-missing">
-                ✗ Not Present
+                <Icon name="lucide:x" aria-hidden="true" />
+                Not present
               </span>
             </span>
           </div>
@@ -93,7 +183,8 @@
                 {{ getTimestampStatus() }}
               </span>
               <span v-else class="ts-badge ts-badge-none">
-                ✗ Not Present
+                <Icon name="lucide:x" aria-hidden="true" />
+                Not present
               </span>
             </span>
           </div>
@@ -104,13 +195,19 @@
         </div>
 
         <div class="result-header">
-          <h2>TLV Structure</h2>
+          <h2>TLV structure</h2>
           <div class="header-buttons">
             <button @click="toggleEditMode" class="copy-btn" :class="{ 'edit-active': editMode }">
-              {{ editMode ? '❌ Cancel' : '✏️ Edit' }}
+              <Icon :name="editMode ? 'lucide:x' : 'lucide:pencil'" aria-hidden="true" />
+              {{ editMode ? 'Cancel' : 'Edit' }}
+            </button>
+            <button @click="showAsQR" class="copy-btn">
+              <Icon name="lucide:qr-code" aria-hidden="true" />
+              Show as QR
             </button>
             <button @click="copyToClipboard" class="copy-btn">
-              📋 {{ copyText }}
+              <Icon name="lucide:copy" aria-hidden="true" />
+              {{ copyText }}
             </button>
           </div>
         </div>
@@ -142,7 +239,7 @@
               <label>Amount:</label>
               <input v-model="editAmount" type="text" class="edit-input" placeholder="e.g., 100.50"
                 @input="validateAmount">
-              <span v-if="editAmount && !isValidAmount()" class="edit-field-error">⚠️ Invalid amount format</span>
+              <span v-if="editAmount && !isValidAmount()" class="edit-field-error"><Icon name="lucide:triangle-alert" aria-hidden="true" />Invalid amount format</span>
               <span v-else-if="editAmount" class="edit-field-hint">Valid amount</span>
             </div>
 
@@ -188,50 +285,84 @@
 
           <div class="edit-validation-summary">
             <div class="validation-item" :class="{ 'valid': editMerchantID, 'invalid': !editMerchantID }">
-              <span class="validation-icon">{{ editMerchantID ? '✓' : '○' }}</span>
+              <Icon :name="editMerchantID ? 'lucide:check' : 'lucide:circle'" class="validation-icon" aria-hidden="true" />
               <span>Merchant ID</span>
             </div>
             <div class="validation-item"
               :class="{ 'valid': editAmount && isValidAmount(), 'invalid': editAmount && !isValidAmount() }">
-              <span class="validation-icon">{{ (editAmount && isValidAmount()) ? '✓' : '○' }}</span>
+              <Icon :name="(editAmount && isValidAmount()) ? 'lucide:check' : 'lucide:circle'" class="validation-icon" aria-hidden="true" />
               <span>Amount</span>
             </div>
             <div class="validation-item" :class="{ 'valid': editMerchantName, 'invalid': !editMerchantName }">
-              <span class="validation-icon">{{ editMerchantName ? '✓' : '○' }}</span>
+              <Icon :name="editMerchantName ? 'lucide:check' : 'lucide:circle'" class="validation-icon" aria-hidden="true" />
               <span>Merchant Name</span>
             </div>
             <div class="validation-item" :class="{ 'valid': editMCC, 'invalid': !editMCC }">
-              <span class="validation-icon">{{ editMCC ? '✓' : '○' }}</span>
+              <Icon :name="editMCC ? 'lucide:check' : 'lucide:circle'" class="validation-icon" aria-hidden="true" />
               <span>MCC</span>
             </div>
           </div>
 
           <div class="edit-actions">
             <button @click="updateMerchantData" class="btn btn-primary edit-update-btn" :disabled="!canUpdate()">
-              🔐 Update & Encrypt Checksum (CRC-16/IBM-3740)
+              <Icon name="lucide:shield-check" aria-hidden="true" />
+              Update &amp; recompute checksum (CRC-16/IBM-3740)
             </button>
             <button @click="resetEditForm" class="btn btn-secondary edit-reset-btn">
               ↻ Reset Form
             </button>
             <button @click="toggleEditMode" class="btn btn-secondary edit-cancel-btn">
-              ❌ Cancel
+              <Icon name="lucide:x" aria-hidden="true" />
+              Cancel
             </button>
           </div>
         </div>
 
-        <div class="tlv-tree">
+        <div class="tlv-tree" :key="treeAnimKey">
           <!-- Root tags -->
           <div class="tree-item" v-if="parsedTLV['00']">
             <span class="tree-tag">{{ parsedTLV['00'].tag }}</span>
             <span class="tree-length">{{ String(parsedTLV['00'].length).padStart(2, '0') }}</span>
-            <span class="tree-data">{{ parsedTLV['00'].value }}</span>
+            <template v-if="editMode && inlineTag === '00'">
+              <input v-model="inlineValue" :ref="'inline-00'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === parsedTLV['00'].value }" @click="copyValue(parsedTLV['00'].value, parsedTLV['00'].value)" :title="copiedItemId === parsedTLV['00'].value ? 'Copied' : 'Click to copy'">{{ parsedTLV['00'].value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('00', parsedTLV['00'].value)" :title="'Edit tag 00'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= Version</span>
           </div>
 
           <div class="tree-item" v-if="parsedTLV['01']">
             <span class="tree-tag">{{ parsedTLV['01'].tag }}</span>
             <span class="tree-length">{{ String(parsedTLV['01'].length).padStart(2, '0') }}</span>
-            <span class="tree-data">{{ parsedTLV['01'].value }}</span>
+            <template v-if="editMode && inlineTag === '01'">
+              <input v-model="inlineValue" :ref="'inline-01'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === parsedTLV['01'].value }" @click="copyValue(parsedTLV['01'].value, parsedTLV['01'].value)" :title="copiedItemId === parsedTLV['01'].value ? 'Copied' : 'Click to copy'">{{ parsedTLV['01'].value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('01', parsedTLV['01'].value)" :title="'Edit tag 01'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= {{ getInitiationMethodDescription(parsedTLV['01'].value) }}</span>
           </div>
 
@@ -246,31 +377,31 @@
               <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['00']">
                 <span class="tree-tag">00</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['00'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag29Nested['00'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag29Nested['00'].value }" @click="copyValue(headerInfo.tag29Nested['00'].value, headerInfo.tag29Nested['00'].value)" :title="copiedItemId === headerInfo.tag29Nested['00'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag29Nested['00'].value }}</button>
                 <span class="tree-meaning">= Bakong ID</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['01']">
                 <span class="tree-tag">01</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['01'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag29Nested['01'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag29Nested['01'].value }" @click="copyValue(headerInfo.tag29Nested['01'].value, headerInfo.tag29Nested['01'].value)" :title="copiedItemId === headerInfo.tag29Nested['01'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag29Nested['01'].value }}</button>
                 <span class="tree-meaning">= Merchant ID</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['02']">
                 <span class="tree-tag">02</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['02'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag29Nested['02'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag29Nested['02'].value }" @click="copyValue(headerInfo.tag29Nested['02'].value, headerInfo.tag29Nested['02'].value)" :title="copiedItemId === headerInfo.tag29Nested['02'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag29Nested['02'].value }}</button>
                 <span class="tree-meaning">= Bank Name</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['10']">
                 <span class="tree-tag">10</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['10'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag29Nested['10'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag29Nested['10'].value }" @click="copyValue(headerInfo.tag29Nested['10'].value, headerInfo.tag29Nested['10'].value)" :title="copiedItemId === headerInfo.tag29Nested['10'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag29Nested['10'].value }}</button>
                 <span class="tree-meaning">= Account Number</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag29Nested['11']">
                 <span class="tree-tag">11</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag29Nested['11'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag29Nested['11'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag29Nested['11'].value }" @click="copyValue(headerInfo.tag29Nested['11'].value, headerInfo.tag29Nested['11'].value)" :title="copiedItemId === headerInfo.tag29Nested['11'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag29Nested['11'].value }}</button>
                 <span class="tree-meaning">= Reference Number</span>
               </div>
             </div>
@@ -287,31 +418,31 @@
               <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['00']">
                 <span class="tree-tag">00</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['00'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag30Nested['00'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag30Nested['00'].value }" @click="copyValue(headerInfo.tag30Nested['00'].value, headerInfo.tag30Nested['00'].value)" :title="copiedItemId === headerInfo.tag30Nested['00'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag30Nested['00'].value }}</button>
                 <span class="tree-meaning">= Bakong ID</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['01']">
                 <span class="tree-tag">01</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['01'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag30Nested['01'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag30Nested['01'].value }" @click="copyValue(headerInfo.tag30Nested['01'].value, headerInfo.tag30Nested['01'].value)" :title="copiedItemId === headerInfo.tag30Nested['01'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag30Nested['01'].value }}</button>
                 <span class="tree-meaning">= Merchant ID</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['02']">
                 <span class="tree-tag">02</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['02'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag30Nested['02'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag30Nested['02'].value }" @click="copyValue(headerInfo.tag30Nested['02'].value, headerInfo.tag30Nested['02'].value)" :title="copiedItemId === headerInfo.tag30Nested['02'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag30Nested['02'].value }}</button>
                 <span class="tree-meaning">= Bank Name</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['10']">
                 <span class="tree-tag">10</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['10'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag30Nested['10'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag30Nested['10'].value }" @click="copyValue(headerInfo.tag30Nested['10'].value, headerInfo.tag30Nested['10'].value)" :title="copiedItemId === headerInfo.tag30Nested['10'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag30Nested['10'].value }}</button>
                 <span class="tree-meaning">= Account Number</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.tag30Nested['11']">
                 <span class="tree-tag">11</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag30Nested['11'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag30Nested['11'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag30Nested['11'].value }" @click="copyValue(headerInfo.tag30Nested['11'].value, headerInfo.tag30Nested['11'].value)" :title="copiedItemId === headerInfo.tag30Nested['11'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag30Nested['11'].value }}</button>
                 <span class="tree-meaning">= Reference Number</span>
               </div>
             </div>
@@ -328,31 +459,31 @@
               <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['00']">
                 <span class="tree-tag">00</span>
                 <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['00'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.bankInfoNested['00'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.bankInfoNested['00'].value }" @click="copyValue(headerInfo.bankInfoNested['00'].value, headerInfo.bankInfoNested['00'].value)" :title="copiedItemId === headerInfo.bankInfoNested['00'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.bankInfoNested['00'].value }}</button>
                 <span class="tree-meaning">= Bakong ID</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['01']">
                 <span class="tree-tag">01</span>
                 <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['01'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.bankInfoNested['01'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.bankInfoNested['01'].value }" @click="copyValue(headerInfo.bankInfoNested['01'].value, headerInfo.bankInfoNested['01'].value)" :title="copiedItemId === headerInfo.bankInfoNested['01'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.bankInfoNested['01'].value }}</button>
                 <span class="tree-meaning">= Merchant ID</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['02']">
                 <span class="tree-tag">02</span>
                 <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['02'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.bankInfoNested['02'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.bankInfoNested['02'].value }" @click="copyValue(headerInfo.bankInfoNested['02'].value, headerInfo.bankInfoNested['02'].value)" :title="copiedItemId === headerInfo.bankInfoNested['02'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.bankInfoNested['02'].value }}</button>
                 <span class="tree-meaning">= Bank Name</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['10']">
                 <span class="tree-tag">10</span>
                 <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['10'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.bankInfoNested['10'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.bankInfoNested['10'].value }" @click="copyValue(headerInfo.bankInfoNested['10'].value, headerInfo.bankInfoNested['10'].value)" :title="copiedItemId === headerInfo.bankInfoNested['10'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.bankInfoNested['10'].value }}</button>
                 <span class="tree-meaning">= Account Number</span>
               </div>
               <div class="tree-subitem-line" v-if="headerInfo.bankInfoNested['11']">
                 <span class="tree-tag">11</span>
                 <span class="tree-length">{{ formatLength(headerInfo.bankInfoNested['11'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.bankInfoNested['11'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.bankInfoNested['11'].value }" @click="copyValue(headerInfo.bankInfoNested['11'].value, headerInfo.bankInfoNested['11'].value)" :title="copiedItemId === headerInfo.bankInfoNested['11'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.bankInfoNested['11'].value }}</button>
                 <span class="tree-meaning">= Reference Number</span>
               </div>
             </div>
@@ -363,17 +494,49 @@
             :class="{ 'mcc-tag-present': headerInfo.merchantCategoryTag }">
             <span class="tree-tag mcc-tag-highlight">52</span>
             <span class="tree-length">{{ formatLength(headerInfo.merchantCategoryTag.length) }}</span>
-            <span class="tree-data">{{ headerInfo.merchantCategoryTag.value }}</span>
+            <template v-if="editMode && inlineTag === '52'">
+              <input v-model="inlineValue" :ref="'inline-52'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.merchantCategoryTag.value }" @click="copyValue(headerInfo.merchantCategoryTag.value, headerInfo.merchantCategoryTag.value)" :title="copiedItemId === headerInfo.merchantCategoryTag.value ? 'Copied' : 'Click to copy'">{{ headerInfo.merchantCategoryTag.value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('52', headerInfo.merchantCategoryTag.value)" :title="'Edit tag 52'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= {{ getMerchantCategoryDescription(headerInfo.merchantCategoryTag.value)
               }}</span>
-            <span class="mcc-indicator">✓ MCC Present</span>
+            <span class="mcc-indicator"><Icon name="lucide:check" aria-hidden="true" />MCC present</span>
           </div>
 
           <!-- Tag 53: Currency -->
           <div class="tree-item" v-if="headerInfo.currencyTag">
             <span class="tree-tag">53</span>
             <span class="tree-length">{{ formatLength(headerInfo.currencyTag.length) }}</span>
-            <span class="tree-data">{{ headerInfo.currencyTag.value }}</span>
+            <template v-if="editMode && inlineTag === '53'">
+              <input v-model="inlineValue" :ref="'inline-53'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.currencyTag.value }" @click="copyValue(headerInfo.currencyTag.value, headerInfo.currencyTag.value)" :title="copiedItemId === headerInfo.currencyTag.value ? 'Copied' : 'Click to copy'">{{ headerInfo.currencyTag.value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('53', headerInfo.currencyTag.value)" :title="'Edit tag 53'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= {{ getCurrencyDescription(headerInfo.currencyTag.value) }}</span>
           </div>
 
@@ -381,7 +544,23 @@
           <div class="tree-item" v-if="headerInfo.amountTag">
             <span class="tree-tag">54</span>
             <span class="tree-length">{{ formatLength(headerInfo.amountTag.length) }}</span>
-            <span class="tree-data">{{ headerInfo.amountTag.value }}</span>
+            <template v-if="editMode && inlineTag === '54'">
+              <input v-model="inlineValue" :ref="'inline-54'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.amountTag.value }" @click="copyValue(headerInfo.amountTag.value, headerInfo.amountTag.value)" :title="copiedItemId === headerInfo.amountTag.value ? 'Copied' : 'Click to copy'">{{ headerInfo.amountTag.value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('54', headerInfo.amountTag.value)" :title="'Edit tag 54'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= Amount</span>
           </div>
 
@@ -389,7 +568,23 @@
           <div class="tree-item" v-if="headerInfo.countryTag">
             <span class="tree-tag">58</span>
             <span class="tree-length">{{ formatLength(headerInfo.countryTag.length) }}</span>
-            <span class="tree-data">{{ headerInfo.countryTag.value }}</span>
+            <template v-if="editMode && inlineTag === '58'">
+              <input v-model="inlineValue" :ref="'inline-58'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.countryTag.value }" @click="copyValue(headerInfo.countryTag.value, headerInfo.countryTag.value)" :title="copiedItemId === headerInfo.countryTag.value ? 'Copied' : 'Click to copy'">{{ headerInfo.countryTag.value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('58', headerInfo.countryTag.value)" :title="'Edit tag 58'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= {{ getCountryDescription(headerInfo.countryTag.value) }}</span>
           </div>
 
@@ -397,7 +592,23 @@
           <div class="tree-item" v-if="headerInfo.merchantNameTag">
             <span class="tree-tag">59</span>
             <span class="tree-length">{{ formatLength(headerInfo.merchantNameTag.length) }}</span>
-            <span class="tree-data">{{ headerInfo.merchantNameTag.value }}</span>
+            <template v-if="editMode && inlineTag === '59'">
+              <input v-model="inlineValue" :ref="'inline-59'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.merchantNameTag.value }" @click="copyValue(headerInfo.merchantNameTag.value, headerInfo.merchantNameTag.value)" :title="copiedItemId === headerInfo.merchantNameTag.value ? 'Copied' : 'Click to copy'">{{ headerInfo.merchantNameTag.value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('59', headerInfo.merchantNameTag.value)" :title="'Edit tag 59'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= Merchant Name</span>
           </div>
 
@@ -405,7 +616,23 @@
           <div class="tree-item" v-if="headerInfo.merchantCityTag">
             <span class="tree-tag">60</span>
             <span class="tree-length">{{ formatLength(headerInfo.merchantCityTag.length) }}</span>
-            <span class="tree-data">{{ headerInfo.merchantCityTag.value }}</span>
+            <template v-if="editMode && inlineTag === '60'">
+              <input v-model="inlineValue" :ref="'inline-60'" class="inline-input"
+                @keyup.enter="commitInlineEdit" @keyup.esc="cancelInlineEdit" maxlength="99">
+              <button type="button" class="inline-ok" @click="commitInlineEdit" title="Save">
+                <Icon name="lucide:check" aria-hidden="true" />
+              </button>
+              <button type="button" class="inline-cancel" @click="cancelInlineEdit" title="Cancel">
+                <Icon name="lucide:x" aria-hidden="true" />
+              </button>
+            </template>
+            <template v-else>
+              <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.merchantCityTag.value }" @click="copyValue(headerInfo.merchantCityTag.value, headerInfo.merchantCityTag.value)" :title="copiedItemId === headerInfo.merchantCityTag.value ? 'Copied' : 'Click to copy'">{{ headerInfo.merchantCityTag.value }}</button>
+              <button v-if="editMode" type="button" class="inline-edit-btn"
+                @click="startInlineEdit('60', headerInfo.merchantCityTag.value)" :title="'Edit tag 60'">
+                <Icon name="lucide:pencil" aria-hidden="true" />
+              </button>
+            </template>
             <span class="tree-meaning">= Merchant City</span>
           </div>
 
@@ -420,28 +647,28 @@
               <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['01']">
                 <span class="tree-tag">01</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['01'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag62Nested['01'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag62Nested['01'].value }" @click="copyValue(headerInfo.tag62Nested['01'].value, headerInfo.tag62Nested['01'].value)" :title="copiedItemId === headerInfo.tag62Nested['01'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag62Nested['01'].value }}</button>
                 <span class="tree-meaning">= Bill Number</span>
               </div>
 
               <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['02']">
                 <span class="tree-tag">02</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['02'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag62Nested['02'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag62Nested['02'].value }" @click="copyValue(headerInfo.tag62Nested['02'].value, headerInfo.tag62Nested['02'].value)" :title="copiedItemId === headerInfo.tag62Nested['02'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag62Nested['02'].value }}</button>
                 <span class="tree-meaning">= Mobile Number</span>
               </div>
 
               <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['03']">
                 <span class="tree-tag">03</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['03'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag62Nested['03'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag62Nested['03'].value }" @click="copyValue(headerInfo.tag62Nested['03'].value, headerInfo.tag62Nested['03'].value)" :title="copiedItemId === headerInfo.tag62Nested['03'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag62Nested['03'].value }}</button>
                 <span class="tree-meaning">= Store Label</span>
               </div>
 
               <div class="tree-subitem-line" v-if="headerInfo.tag62Nested['07']">
                 <span class="tree-tag">07</span>
                 <span class="tree-length">{{ formatLength(headerInfo.tag62Nested['07'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.tag62Nested['07'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.tag62Nested['07'].value }" @click="copyValue(headerInfo.tag62Nested['07'].value, headerInfo.tag62Nested['07'].value)" :title="copiedItemId === headerInfo.tag62Nested['07'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.tag62Nested['07'].value }}</button>
                 <span class="tree-meaning">= Terminal Number</span>
               </div>
 
@@ -450,7 +677,7 @@
                 :key="'tag62-' + subtag" v-if="!['01', '02', '03', '07'].includes(subtag)">
                 <span class="tree-tag">{{ subtag }}</span>
                 <span class="tree-length">{{ formatLength(subtagData.length) }}</span>
-                <span class="tree-data">{{ subtagData.value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === subtagData.value }" @click="copyValue(subtagData.value, subtagData.value)" :title="copiedItemId === subtagData.value ? 'Copied' : 'Click to copy'">{{ subtagData.value }}</button>
                 <span class="tree-meaning">= Additional Info</span>
               </div>
             </div>
@@ -468,7 +695,7 @@
               <div class="tree-subitem-line" v-if="headerInfo.timestampNested['00']">
                 <span class="tree-tag">00</span>
                 <span class="tree-length">{{ formatLength(headerInfo.timestampNested['00'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.timestampNested['00'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.timestampNested['00'].value }" @click="copyValue(headerInfo.timestampNested['00'].value, headerInfo.timestampNested['00'].value)" :title="copiedItemId === headerInfo.timestampNested['00'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.timestampNested['00'].value }}</button>
                 <span class="tree-meaning">= Create Time</span>
               </div>
               <div class="tree-subitem-conversion" v-if="headerInfo.timestampNested['00']"
@@ -480,7 +707,7 @@
               <div class="tree-subitem-line" v-if="headerInfo.timestampNested['01']">
                 <span class="tree-tag">01</span>
                 <span class="tree-length">{{ formatLength(headerInfo.timestampNested['01'].length) }}</span>
-                <span class="tree-data">{{ headerInfo.timestampNested['01'].value }}</span>
+                <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === headerInfo.timestampNested['01'].value }" @click="copyValue(headerInfo.timestampNested['01'].value, headerInfo.timestampNested['01'].value)" :title="copiedItemId === headerInfo.timestampNested['01'].value ? 'Copied' : 'Click to copy'">{{ headerInfo.timestampNested['01'].value }}</button>
                 <span class="tree-meaning">= Expiry Time</span>
               </div>
               <div class="tree-subitem-conversion" v-if="headerInfo.timestampNested['01']"
@@ -496,18 +723,21 @@
             :class="{ 'checksum-valid': validateChecksum(qrResult) === true }">
             <span class="tree-tag">{{ parsedTLV['63'].tag }}</span>
             <span class="tree-length">{{ formatLength(parsedTLV['63'].length) }}</span>
-            <span class="tree-data">{{ parsedTLV['63'].value }}</span>
+            <button type="button" class="tree-data" :class="{ 'is-copied': copiedItemId === parsedTLV['63'].value }" @click="copyValue(parsedTLV['63'].value, parsedTLV['63'].value)" :title="copiedItemId === parsedTLV['63'].value ? 'Copied' : 'Click to copy'">{{ parsedTLV['63'].value }}</button>
             <span class="tree-meaning">= Checksum (CRC-16/IBM-3740)</span>
             <a v-if="editMode" :href="getCRCCalculatorLink()" target="_blank" class="crc-link">
-              🔗 Verify CRC
+              <Icon name="lucide:external-link" aria-hidden="true" />
+              Verify CRC
             </a>
           </div>
         </div>
       </div>
 
       <!-- Generate Tab -->
-      <div v-show="activeTab === 'generate'" class="tab-content">
+      <Transition name="tab">
+      <div v-if="activeTab === 'generate'" class="tab-content">
         <div class="input-area">
+          <div class="shell">
           <div class="live-preview-toggle">
             <label class="toggle-label">
               <input type="checkbox" v-model="livePreview" class="toggle-checkbox">
@@ -521,19 +751,28 @@
 
           <div class="action-buttons">
             <button @click="generateQRCode" class="btn btn-primary" v-if="!livePreview">
-              ✨ Generate QR
+              <Icon name="lucide:qr-code" aria-hidden="true" />
+              Generate QR
             </button>
             <button @click="downloadQRCode" v-if="generatedQRImage" class="btn btn-primary">
-              ⬇️ Download
+              <Icon name="lucide:download" aria-hidden="true" />
+              Download
             </button>
             <button @click="clearGenerate" class="btn btn-secondary">
               Clear
             </button>
           </div>
+          </div>
         </div>
 
-        <div v-if="generatedQRImage" class="generate-result">
-          <h3 class="data-label">Generated QR Code</h3>
+        <div v-if="generatedQRImage" class="generate-result shell">
+          <div class="generate-head">
+            <h3 class="data-label">Generated QR code</h3>
+            <button @click="decodeGenerated" class="copy-btn">
+              <Icon name="lucide:scan-line" aria-hidden="true" />
+              Decode this
+            </button>
+          </div>
           <div class="qr-display-container">
             <img :src="generatedQRImage" alt="Generated QR Code" class="qr-image" />
           </div>
@@ -541,12 +780,13 @@
           <div class="download-options">
             <label class="download-label">Download Format:</label>
             <select v-model="downloadFormat" class="download-select">
-              <option value="svg">🌐 SVG (Recommended)</option>
-              <option value="png">🖼️ PNG</option>
-              <option value="jpg">📷 JPG</option>
+              <option value="svg">SVG (recommended)</option>
+              <option value="png">PNG</option>
+              <option value="jpg">JPG</option>
             </select>
             <button @click="downloadQRCode" class="btn btn-primary">
-              ⬇️ Download
+              <Icon name="lucide:download" aria-hidden="true" />
+              Download
             </button>
           </div>
 
@@ -556,12 +796,14 @@
           </div>
         </div>
       </div>
+      </Transition>
 
       <!-- Reference Tab -->
-      <div v-show="activeTab === 'reference'" class="tab-content reference-tab">
-        <div class="reference-container">
+      <Transition name="tab">
+      <div v-if="activeTab === 'reference'" class="tab-content reference-tab">
+        <div class="reference-container shell">
           <div class="reference-section">
-            <h3 class="reference-title">🏦 Cambodian Banks (Tag 29/30/51)</h3>
+            <h3 class="reference-title"><Icon name="lucide:landmark" aria-hidden="true" />Cambodian banks (tag 29/30/51)</h3>
             <div class="reference-grid">
               <div class="reference-item" v-for="bank in cambodianBanks" :key="bank">
                 <span class="bank-name">{{ bank }}</span>
@@ -570,7 +812,7 @@
           </div>
 
           <div class="reference-section">
-            <h3 class="reference-title">🏷️ KHQR Tag Definitions</h3>
+            <h3 class="reference-title"><Icon name="lucide:tag" aria-hidden="true" />KHQR tag definitions</h3>
             <div class="tag-definitions">
               <div class="tag-def">
                 <span class="tag-code">00</span>
@@ -628,7 +870,7 @@
           </div>
 
           <div class="reference-section">
-            <h3 class="reference-title">💼 Merchant Category Codes (MCC)</h3>
+            <h3 class="reference-title"><Icon name="lucide:briefcase" aria-hidden="true" />Merchant category codes (MCC)</h3>
             <div class="mcc-search">
               <input v-model="mccSearchFilter" type="text" placeholder="Search MCC by code or description..."
                 class="mcc-search-input">
@@ -642,7 +884,7 @@
           </div>
 
           <div class="reference-section">
-            <h3 class="reference-title">💱 Currency Codes</h3>
+            <h3 class="reference-title"><Icon name="lucide:arrow-right-left" aria-hidden="true" />Currency codes</h3>
             <div class="currency-grid">
               <div class="currency-item">
                 <span class="curr-code">840</span>
@@ -656,8 +898,16 @@
           </div>
         </div>
       </div>
+      </Transition>
 
     </div>
+
+    <!-- Toasts render here so scoped styles apply and AT is notified. -->
+    <TransitionGroup name="toast" tag="div" class="toast-host" role="status" aria-live="polite">
+      <div v-for="toast in toasts" :key="toast.id" class="notification" :class="'notification-' + toast.type">
+        {{ toast.message }}
+      </div>
+    </TransitionGroup>
   </div>
 </template>
 
@@ -705,6 +955,27 @@ export default {
       ],
       copiedItemId: null,
       livePreview: true,
+      // Toasts live in the template so scoped styles and aria-live apply.
+      toasts: [],
+      toastSeq: 0,
+      // Parser diagnostics surfaced to the user instead of failing silently.
+      parseIssues: [],
+      // Ticks once a second so timestamp countdowns stay live.
+      now: Date.now(),
+      clockTimer: null,
+      // Image / camera scanning.
+      scanBusy: false,
+      dragOver: false,
+      cameraOn: false,
+      cameraError: null,
+      qrScanner: null,
+      // Inline tag editing in the TLV tree.
+      inlineTag: null,
+      inlineValue: '',
+      // Bumped only by explicit load actions (paste, sample, scan, share link).
+      // Typing in the textarea re-decodes on every keystroke, so keying the
+      // tree's entrance on the decode itself would replay it per character.
+      treeAnimKey: 0,
       mccSearchFilter: '',
       sampleDataOptions: [
         {
@@ -1096,6 +1367,19 @@ export default {
     },
   },
   mounted() {
+    // A payload in the URL wins over the built-in default so links are shareable.
+    const fromUrl = new URLSearchParams(window.location.search).get('d');
+    if (fromUrl && fromUrl.trim()) {
+      this.treeAnimKey++;
+      this.manualQRInput = fromUrl.trim();
+    }
+
+    // Timestamp countdowns are rendered from `now`; without this they froze at
+    // whatever the value was on first render.
+    this.clockTimer = setInterval(() => {
+      this.now = Date.now();
+    }, 1000);
+
     if (this.manualQRInput.trim()) {
       this.$nextTick(() => {
         this.decodeManualQR();
@@ -1111,8 +1395,12 @@ export default {
     document.addEventListener('paste', this.handleGlobalPaste);
   },
 
-  beforeDestroy() {
+  // Was `beforeDestroy`, which is a Vue 2 hook and never fires under Vue 3 —
+  // the paste listener leaked and kept firing against a torn-down component.
+  beforeUnmount() {
     document.removeEventListener('paste', this.handleGlobalPaste);
+    if (this.clockTimer) clearInterval(this.clockTimer);
+    this.stopCamera();
   },
 
   watch: {
@@ -1130,6 +1418,174 @@ export default {
   },
 
   methods: {
+    // ------------------------------------------------------- URL state ----
+    syncUrl(payload) {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      if (payload) url.searchParams.set('d', payload);
+      else url.searchParams.delete('d');
+      window.history.replaceState({}, '', url);
+    },
+
+    async copyShareLink() {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        this.showNotification('Share link copied', 'success');
+      } catch {
+        this.showNotification('Could not copy the link', 'error');
+      }
+    },
+
+    // ------------------------------------------------ image / camera scan --
+    // `qr-scanner` was imported but never called, so the page could only ever
+    // accept a payload that had already been decoded somewhere else.
+    async scanImageFile(file) {
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        this.showNotification('That file is not an image', 'error');
+        return;
+      }
+      this.scanBusy = true;
+      try {
+        const result = await QrScanner.scanImage(file, { returnDetailedScanResult: true });
+        const text = (result && result.data ? result.data : result || '').trim();
+        if (!text) throw new Error('empty');
+        this.treeAnimKey++;
+        this.manualQRInput = text;
+        this.activeTab = 'decode';
+        this.showNotification('QR code read from image', 'success');
+      } catch (error) {
+        console.error('Image scan failed:', error);
+        this.showNotification('No QR code found in that image', 'error');
+      } finally {
+        this.scanBusy = false;
+      }
+    },
+
+    onFilePicked(event) {
+      const file = event.target.files && event.target.files[0];
+      this.scanImageFile(file);
+      event.target.value = '';
+    },
+
+    onDrop(event) {
+      this.dragOver = false;
+      const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+      this.scanImageFile(file);
+    },
+
+    async toggleCamera() {
+      if (this.cameraOn) {
+        this.stopCamera();
+        return;
+      }
+      this.cameraError = null;
+      this.cameraOn = true;
+      await this.$nextTick();
+      try {
+        this.qrScanner = new QrScanner(
+          this.$refs.video,
+          (result) => {
+            const text = (result && result.data ? result.data : result || '').trim();
+            if (!text) return;
+            this.treeAnimKey++;
+            this.manualQRInput = text;
+            this.stopCamera();
+            this.showNotification('QR code scanned', 'success');
+          },
+          { highlightScanRegion: true, highlightCodeOutline: true, maxScansPerSecond: 5 },
+        );
+        await this.qrScanner.start();
+      } catch (error) {
+        console.error('Camera failed:', error);
+        this.cameraError = 'Camera unavailable. Check browser permissions, or use an image instead.';
+        this.stopCamera();
+      }
+    },
+
+    stopCamera() {
+      if (this.qrScanner) {
+        this.qrScanner.stop();
+        this.qrScanner.destroy();
+        this.qrScanner = null;
+      }
+      this.cameraOn = false;
+    },
+
+    // ------------------------------------------------ decode <-> generate --
+    showAsQR() {
+      this.qrDataToGenerate = this.qrResult;
+      this.activeTab = 'generate';
+      this.generateQRCode();
+      this.showNotification('Rendered from the decoded payload', 'info');
+    },
+
+    decodeGenerated() {
+      this.treeAnimKey++;
+      this.manualQRInput = this.qrDataToGenerate;
+      this.activeTab = 'decode';
+      this.showNotification('Decoding the generated payload', 'info');
+    },
+
+    // --------------------------------------------------- granular copying --
+    async copyValue(text, id) {
+      try {
+        await navigator.clipboard.writeText(text);
+        this.copiedItemId = id;
+        setTimeout(() => {
+          if (this.copiedItemId === id) this.copiedItemId = null;
+        }, 1600);
+      } catch {
+        this.showNotification('Could not copy that value', 'error');
+      }
+    },
+
+    // ------------------------------------------------- inline tag editing --
+    startInlineEdit(tag, value) {
+      this.inlineTag = tag;
+      this.inlineValue = value;
+      this.$nextTick(() => {
+        const el = this.$refs['inline-' + tag];
+        const input = Array.isArray(el) ? el[0] : el;
+        if (input) input.focus();
+      });
+    },
+
+    cancelInlineEdit() {
+      this.inlineTag = null;
+      this.inlineValue = '';
+    },
+
+    // Rebuilds the payload from the parsed tags, so the length header of the
+    // edited tag is recomputed and the CRC is taken over the new bytes.
+    commitInlineEdit() {
+      const tag = this.inlineTag;
+      if (!tag) return;
+      const value = this.inlineValue;
+
+      if (value.length > 99) {
+        this.showNotification('A single tag value cannot exceed 99 characters', 'error');
+        return;
+      }
+
+      let rebuilt = '';
+      for (const key of Object.keys(this.parsedTLV)) {
+        if (key === '63') continue;
+        const entry = this.parsedTLV[key];
+        const v = key === tag ? value : entry.value;
+        rebuilt += key + String(v.length).padStart(2, '0') + v;
+      }
+      rebuilt += '6304' + this.calculateCRC16(rebuilt + '6304');
+
+      this.cancelInlineEdit();
+      this.manualQRInput = rebuilt;
+      this.showNotification(`Tag ${tag} updated and checksum recomputed`, 'success');
+    },
+
+    isNestedTag(tag) {
+      return ['29', '30', '51', '62', '99'].includes(tag);
+    },
+
     decodeManualQR() {
       if (this.manualQRInput.trim()) {
         this.processQRResult(this.manualQRInput.trim());
@@ -1151,6 +1607,7 @@ export default {
         if (navigator.clipboard && navigator.clipboard.readText) {
           const text = await navigator.clipboard.readText();
           if (text && text.trim()) {
+            this.treeAnimKey++;
             this.manualQRInput = text.trim();
             this.$nextTick(() => {
               this.processQRResult(text.trim());
@@ -1171,10 +1628,24 @@ export default {
     handleGlobalPaste(event) {
       try {
         const clipboardData = event.clipboardData || window.clipboardData;
+
+        // A pasted screenshot is at least as common as a pasted payload string.
+        const items = clipboardData.items ? Array.from(clipboardData.items) : [];
+        const imageItem = items.find((i) => i.type && i.type.startsWith('image/'));
+        if (imageItem) {
+          const file = imageItem.getAsFile();
+          if (file) {
+            event.preventDefault();
+            this.scanImageFile(file);
+            return;
+          }
+        }
+
         const pastedText = clipboardData.getData('text');
 
         if (pastedText && pastedText.trim()) {
           if (pastedText.includes('00') && (pastedText.includes('29') || pastedText.includes('30') || pastedText.includes('51'))) {
+            this.treeAnimKey++;
             this.manualQRInput = pastedText.trim();
             this.$nextTick(() => {
               this.processQRResult(pastedText.trim());
@@ -1190,6 +1661,7 @@ export default {
     loadSampleData(event) {
       const data = event.target.value;
       if (data) {
+        this.treeAnimKey++;
         this.manualQRInput = data;
         this.$nextTick(() => {
           event.target.value = '';
@@ -1198,8 +1670,23 @@ export default {
     },
 
     processQRResult(qrString) {
+      const issues = [];
       this.qrResult = qrString;
-      this.parsedTLV = this.parseTLVStructure(qrString);
+      this.parsedTLV = this.parseTLVStructure(qrString, issues);
+
+      if (!Object.keys(this.parsedTLV).length) {
+        issues.unshift({
+          level: 'error',
+          message: 'No TLV tags could be read. This does not look like a KHQR payload.',
+        });
+      } else if (!this.parsedTLV['00']) {
+        issues.unshift({
+          level: 'warn',
+          message: 'Tag 00 (Payload Format Indicator) is missing — a valid KHQR always starts with it.',
+        });
+      }
+      this.parseIssues = issues;
+      this.syncUrl(qrString);
 
       this.headerInfo.tag29Nested = {};
       this.headerInfo.tag30Nested = {};
@@ -1245,23 +1732,41 @@ export default {
       }
     },
 
-    parseTLVStructure(dataString) {
+    parseTLVStructure(dataString, issues = null) {
       const result = {};
       let position = 0;
+      const note = (level, message) => {
+        if (issues) issues.push({ level, message });
+      };
 
       while (position < dataString.length - 1) {
-        if (position + 2 > dataString.length) break;
+        if (position + 2 > dataString.length) {
+          note('error', `Trailing byte at offset ${position} — expected a 2-digit tag.`);
+          break;
+        }
         const tag = dataString.substring(position, position + 2);
         position += 2;
 
-        if (position + 2 > dataString.length) break;
+        if (!/^\d{2}$/.test(tag)) {
+          note('error', `Offset ${position - 2}: "${tag}" is not a valid 2-digit tag. Parsing stopped.`);
+          break;
+        }
+
+        if (position + 2 > dataString.length) {
+          note('error', `Tag ${tag} at offset ${position - 2} has no length field.`);
+          break;
+        }
         const lengthStr = dataString.substring(position, position + 2);
         const length = parseInt(lengthStr, 10);
         position += 2;
 
-        if (isNaN(length) || length < 0) break;
+        if (isNaN(length) || length < 0) {
+          note('error', `Tag ${tag}: length "${lengthStr}" is not a number. Parsing stopped.`);
+          break;
+        }
 
         if (position + length > dataString.length) {
+          note('warn', `Tag ${tag} declares length ${length} but only ${dataString.length - position} bytes remain — attempting recovery.`);
           let found = false;
           for (let i = position; i < Math.min(position + length + 10, dataString.length - 4); i++) {
             const nextTag = dataString.substring(i, i + 2);
@@ -1280,7 +1785,11 @@ export default {
               break;
             }
           }
-          if (!found) break;
+          if (!found) {
+            note('error', `Could not recover after tag ${tag}; the remainder of the payload was discarded.`);
+            break;
+          }
+          note('warn', `Recovered by resynchronising at offset ${position} — values near tag ${tag} may be wrong.`);
           continue;
         }
 
@@ -1321,6 +1830,9 @@ export default {
       this.parsedTLV = {};
       this.manualQRInput = '';
       this.copyText = 'Copy';
+      this.parseIssues = [];
+      this.cancelInlineEdit();
+      this.syncUrl('');
     },
 
     copyToClipboard() {
@@ -1434,9 +1946,10 @@ export default {
         // Remove old checksum
         updatedResult = updatedResult.replace(/63\d{2}[A-F0-9a-f]{4}$/, '');
 
-        // Calculate and add new checksum
-        const newChecksum = this.calculateCRC16(updatedResult);
-        updatedResult = updatedResult + '63' + '04' + newChecksum;
+        // Calculate and add new checksum. The CRC covers the "6304" header
+        // itself, so it must be appended before the digest is taken.
+        const newChecksum = this.calculateCRC16(updatedResult + '6304');
+        updatedResult = updatedResult + '6304' + newChecksum;
 
         this.manualQRInput = updatedResult;
         this.processQRResult(updatedResult);
@@ -1498,16 +2011,15 @@ export default {
       this.mccSearchInput = '';
     },
 
+    // Rendered from the template rather than document.createElement: scoped
+    // styles only match elements carrying the component's data-v attribute, so
+    // the hand-built node was never styled — and never announced either.
     showNotification(message, type = 'info') {
-      const notification = document.createElement('div');
-      notification.className = `notification notification-${type}`;
-      notification.textContent = message;
-      document.body.appendChild(notification);
-
+      const id = ++this.toastSeq;
+      this.toasts.push({ id, message, type });
       setTimeout(() => {
-        notification.style.opacity = '0';
-        setTimeout(() => notification.remove(), 300);
-      }, 3000);
+        this.toasts = this.toasts.filter((t) => t.id !== id);
+      }, 3600);
     },
 
     getCurrencyDescription(code) {
@@ -1561,8 +2073,11 @@ export default {
       return String(length).padStart(2, '0');
     },
 
+    // CRC-16/IBM-3740 (a.k.a. CCITT-FALSE): poly 0x1021, init 0xFFFF, no
+    // reflection, xorout 0x0000. This previously initialised to 0x0000, which
+    // is CRC-16/XMODEM — a different algorithm that never matches a real KHQR.
     calculateCRC16(data) {
-      let crc = 0x0000;
+      let crc = 0xFFFF;
 
       for (let i = 0; i < data.length; i++) {
         const byte = data.charCodeAt(i);
@@ -1585,10 +2100,27 @@ export default {
       if (!checksumMatch) return null;
 
       const providedChecksum = checksumMatch[1].toUpperCase();
-      const dataWithoutChecksum = qrData.replace(/63\d{2}[A-Fa-f0-9]{4}$/, '');
-      const calculatedChecksum = this.calculateCRC16(dataWithoutChecksum);
+      // EMVCo computes the CRC over everything up to AND INCLUDING the "6304"
+      // tag+length header. The previous code stripped "6304" as well, so even a
+      // correct CRC routine would have disagreed with every real payload.
+      const dataThroughTag63 = qrData.slice(0, -4);
 
-      return providedChecksum === calculatedChecksum;
+      return providedChecksum === this.calculateCRC16(dataThroughTag63);
+    },
+
+    checksumInfo() {
+      if (!this.qrResult) return null;
+      const match = this.qrResult.match(/63\d{2}([A-Fa-f0-9]{4})$/);
+      if (!match) {
+        return { state: 'missing', provided: null, expected: null };
+      }
+      const provided = match[1].toUpperCase();
+      const expected = this.calculateCRC16(this.qrResult.slice(0, -4));
+      return {
+        state: provided === expected ? 'valid' : 'invalid',
+        provided,
+        expected,
+      };
     },
 
     getCRCCalculatorLink() {
@@ -1606,7 +2138,7 @@ export default {
 
     async generateQRCode() {
       if (!this.qrDataToGenerate.trim()) {
-        alert('Please enter KHQR data to generate a QR code');
+        this.showNotification('Enter KHQR data to generate a QR code', 'error');
         return;
       }
 
@@ -1624,7 +2156,7 @@ export default {
         });
       } catch (error) {
         console.error('Error generating QR code:', error);
-        alert('Failed to generate QR code. Please check the data format.');
+        this.showNotification('Could not generate a QR code from that data', 'error');
       }
     },
 
@@ -1711,7 +2243,7 @@ export default {
       }
 
       const expiryTime = parseInt(this.headerInfo.timestampNested['01'].value, 10);
-      const now = new Date().getTime();
+      const now = this.now;
 
       if (isNaN(expiryTime)) {
         return '⚠️ Invalid';
@@ -1764,108 +2296,243 @@ export default {
 </script>
 
 <style scoped>
+/* ============================================================================
+   KHQR Scanner — "inspector" visual language.
+
+   One system, applied everywhere: flat surfaces, hairline borders, tight
+   corners, monospace for payload data, and a single accent colour used only
+   where something is genuinely interactive or genuinely wrong.
+
+   Scales below replace what were ~30 ad-hoc hex values, 29 distinct rem
+   spacings, and 69 gradients.
+   ========================================================================= */
+
+.container {
+  /* -- Neutral ramp ------------------------------------------------------ */
+  --n0: #ffffff;
+  --n25: #fcfcfd;
+  --n50: #f8fafc;
+  --n100: #f1f5f9;
+  --n200: #e2e8f0;
+  --n300: #cbd5e1;
+  --n400: #94a3b8;
+  --n500: #64748b;
+  --n600: #475569;
+  --n700: #334155;
+  --n800: #1e293b;
+  --n900: #0f172a;
+
+  /* -- Single accent ----------------------------------------------------- */
+  --a50: #eff6ff;
+  --a100: #dbeafe;
+  --a200: #bfdbfe;
+  --a500: #3b82f6;
+  --a600: #2563eb;
+  --a700: #1d4ed8;
+
+  /* -- Semantic (used only for state, never decoration) ------------------ */
+  --ok-bg: #f0fdf4;
+  --ok-bd: #bbf7d0;
+  --ok-fg: #15803d;
+  --warn-bg: #fffbeb;
+  --warn-bd: #fde68a;
+  --warn-fg: #b45309;
+  --err-bg: #fef2f2;
+  --err-bd: #fecaca;
+  --err-fg: #b91c1c;
+
+  /* -- Surfaces / text (remapped wholesale for dark mode) ---------------- */
+  --bg: var(--n50);
+  --surface: var(--n0);
+  --surface-2: var(--n50);
+  --surface-3: var(--n100);
+  --border: var(--n200);
+  --border-strong: var(--n300);
+  --text: var(--n900);
+  --text-muted: var(--n600);
+  --text-subtle: var(--n500);
+  --accent: var(--a600);
+  --accent-weak: var(--a50);
+  --accent-border: var(--a200);
+
+  /* -- 4px spacing scale ------------------------------------------------- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s10: 40px;
+  --s12: 48px;
+  --s16: 64px;
+
+  /* -- Radii: tight, three steps ----------------------------------------- */
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
+
+  /* -- Type -------------------------------------------------------------- */
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, 'Courier New', monospace;
+
+  /* -- Motion ------------------------------------------------------------ */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-weight: var(--fw-normal);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (prefers-color-scheme: dark) {
+  .container {
+    --bg: var(--n900);
+    --surface: #131c2b;
+    --surface-2: #0d1420;
+    --surface-3: #1b2537;
+    --border: #24304a;
+    --border-strong: #33415c;
+    --text: var(--n100);
+    --text-muted: var(--n400);
+    --text-subtle: var(--n500);
+    --accent: #60a5fa;
+    --accent-weak: #12203a;
+    --accent-border: #1e3a63;
+
+    --ok-bg: #0c1f16;
+    --ok-bd: #1a4531;
+    --ok-fg: #4ade80;
+    --warn-bg: #241a08;
+    --warn-bd: #4d3711;
+    --warn-fg: #fbbf24;
+    --err-bg: #2a1213;
+    --err-bd: #582226;
+    --err-fg: #f87171;
+  }
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-.container {
-  display: flex;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%);
-  width: 100vw;
-  margin: 0;
-  padding: 0;
+/* @nuxt/icon renders icons as mask-image spans, not inline <svg>. They take
+   their colour from `currentColor`, so state comes from CSS alone. */
+.iconify {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: -0.125em;
 }
 
 .scanner-card {
-  background: white;
+  background: var(--bg);
   width: 100%;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-radius: 0;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.1);
-  margin: 0;
 }
 
-.header {
-  background: linear-gradient(135deg, #1e40af 0%, #0ea5e9 100%);
-  border-bottom: 4px solid #0284c7;
-  padding: 3rem 2.5rem;
-  text-align: left;
+/* Content column. Previously the page was 100vw edge-to-edge, so TLV rows
+   stretched the full width of a large display. */
+.shell {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+/* ---------------------------------------------------------------- header -- */
+
+.sticky-head {
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 8px 24px rgba(30, 64, 175, 0.3);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
-.header-content {
-  max-width: 100%;
+.header {
+  padding: var(--s8) var(--s6) var(--s6);
 }
 
 .title {
-  font-size: 2.2rem;
-  font-weight: 900;
-  margin: 0;
-  color: #ffffff;
-  letter-spacing: -1px;
-  text-shadow: 0 3px 8px rgba(0, 0, 0, 0.2);
+  font-size: 20px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-wrap: balance;
 }
 
 .subtitle {
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0.8rem 0 0 0;
-  font-weight: 500;
-  letter-spacing: 0.3px;
+  margin-top: var(--s1);
+  font-size: 14px;
+  font-weight: var(--fw-normal);
+  color: var(--text-muted);
+  text-wrap: pretty;
 }
 
+/* ------------------------------------------------------------------ tabs -- */
+
 .tab-navigation {
+  padding-inline: var(--s6);
+}
+
+.tab-shell {
   display: flex;
-  gap: 0;
-  padding: 0 2.5rem;
-  background: linear-gradient(to right, #ffffff, #f8fafc);
-  border-bottom: 3px solid #dbeafe;
-  position: sticky;
-  top: 6.2rem;
-  z-index: 9;
+  gap: var(--s1);
 }
 
 .tab-button {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.8rem;
-  padding: 1.5rem 2.2rem;
+  gap: var(--s2);
+  /* Optical alignment: icon side carries 2px less than the text side. */
+  padding: var(--s3) var(--s4) var(--s3) 14px;
+  min-height: 40px;
   background: none;
   border: none;
-  border-bottom: 4px solid transparent;
-  color: #64748b;
-  font-weight: 800;
-  font-size: 1.05rem;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: var(--fw-medium);
+  font-size: 14px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  letter-spacing: 0.3px;
+  transition-property: color, border-bottom-color, background-color, scale;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 .tab-button:hover {
-  color: #1e40af;
-  background: rgba(30, 64, 175, 0.04);
+  color: var(--text);
 }
 
 .tab-button.active {
-  color: #0ea5e9;
-  border-bottom-color: #0ea5e9;
-  background: rgba(14, 165, 233, 0.06);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
+.tab-button:active {
+  scale: 0.96;
+}
+
+.tab-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Icons inherit colour and sit on the text's optical line. */
 .tab-icon {
-  font-size: 1.1rem;
-}
-
-.tab-text {
-  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .tab-content {
@@ -1874,1155 +2541,1201 @@ export default {
   flex: 1;
 }
 
+/* ----------------------------------------------------------- input areas -- */
+
 .input-area {
-  padding: 2.8rem 2.5rem;
-  flex-shrink: 0;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border-bottom: 3px solid #bae6fd;
+  padding: var(--s6);
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
 }
 
 .sample-selector {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  margin-bottom: 2.2rem;
-  padding: 1.8rem;
-  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 14px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
-}
-
-.sample-selector:hover {
-  border-color: #0284c7;
-  background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.3);
-  transform: translateY(-2px);
+  gap: var(--s3);
+  margin-bottom: var(--s4);
 }
 
 .sample-label {
-  font-size: 0.95rem;
-  font-weight: 900;
-  color: #0c4a6e;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
   white-space: nowrap;
-  letter-spacing: 0.3px;
+}
+
+.sample-label .iconify {
+  width: 15px;
+  height: 15px;
+}
+
+.sample-select,
+.edit-select,
+.download-select {
+  padding: var(--s2) var(--s3);
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 14px;
+  font-weight: var(--fw-normal);
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+  transition-property: border-color, box-shadow;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 .sample-select {
   flex: 1;
-  padding: 1.1rem;
-  border: 2px solid #7dd3fc;
-  border-radius: 10px;
-  font-size: 15px;
-  font-family: inherit;
-  color: #0c4a6e;
-  background: white;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 800;
+  min-width: 0;
 }
 
 .sample-select:hover,
-.sample-select:focus {
-  border-color: #0284c7;
-  outline: none;
-  background: #f0f9ff;
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+.edit-select:hover,
+.download-select:hover,
+.edit-input:hover {
+  border-color: var(--n400);
 }
 
 .input-field {
   width: 100%;
-  height: 120px;
-  padding: 1.2rem;
-  border: 2px solid #7dd3fc;
-  border-radius: 12px;
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 14px;
+  height: 112px;
+  padding: var(--s3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  line-height: 1.6;
   resize: vertical;
-  transition: all 0.3s ease;
-  color: #0c4a6e;
-  background: linear-gradient(to bottom, #ffffff, #f0f9ff);
-  margin-bottom: 1.5rem;
-  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  transition-property: border-color, box-shadow;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 .input-field:hover {
-  border-color: #06b6d4;
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
+  border-color: var(--n400);
 }
 
-.input-field:focus {
-  outline: none;
-  border-color: #0284c7;
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
-}
-
+/* Was #7dd3fc on white — roughly 1.6:1. */
 .input-field::placeholder {
-  color: #7dd3fc;
-  font-weight: 500;
+  color: var(--text-subtle);
+}
+
+.sample-select:focus-visible,
+.edit-select:focus-visible,
+.download-select:focus-visible,
+.input-field:focus-visible,
+.edit-input:focus-visible,
+.mcc-search-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-weak);
 }
 
 .action-buttons {
   display: flex;
-  gap: 1.2rem;
-  margin-top: 1.5rem;
-  width: 100%;
+  gap: var(--s2);
+  margin-top: var(--s4);
 }
 
-.action-buttons .btn {
-  flex: 1;
-}
+/* --------------------------------------------------------------- buttons -- */
 
-.btn {
-  padding: 1rem 2.2rem;
-  border: none;
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 0.95rem;
+.btn,
+.copy-btn,
+.edit-update-btn,
+.edit-reset-btn,
+.edit-cancel-btn,
+.mcc-warning-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: var(--fw-medium);
   cursor: pointer;
-  transition: all 0.3s ease;
-  background: white;
-  color: #0c4a6e;
-  letter-spacing: 0px;
+  white-space: nowrap;
+  transition-property: background-color, border-color, color, scale, box-shadow;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
-.btn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 20px rgba(14, 165, 233, 0.25);
+.btn .iconify,
+.copy-btn .iconify,
+.edit-update-btn .iconify,
+.edit-cancel-btn .iconify,
+.mcc-warning-btn .iconify,
+.crc-link .iconify {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
 }
 
-.btn:active {
-  transform: translateY(0);
+.btn:hover,
+.copy-btn:hover,
+.edit-cancel-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--n400);
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-  font-weight: 800;
+.btn:active,
+.copy-btn:active,
+.edit-update-btn:active:not(:disabled),
+.edit-reset-btn:active,
+.edit-cancel-btn:active,
+.mcc-warning-btn:active {
+  scale: 0.96;
 }
 
-.btn-primary:hover {
-  background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
-  transform: translateY(-3px);
-  box-shadow: 0 12px 20px rgba(14, 165, 233, 0.4);
+.btn:focus-visible,
+.copy-btn:focus-visible,
+.edit-update-btn:focus-visible,
+.edit-reset-btn:focus-visible,
+.edit-cancel-btn:focus-visible,
+.mcc-warning-btn:focus-visible,
+.crc-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn-primary,
+.paste-btn,
+.edit-update-btn {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #ffffff;
+}
+
+.btn-primary:hover,
+.paste-btn:hover,
+.edit-update-btn:hover:not(:disabled) {
+  background: var(--a700);
+  border-color: var(--a700);
+  color: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+
+  .btn-primary,
+  .paste-btn,
+  .edit-update-btn {
+    color: var(--n900);
+  }
+
+  .btn-primary:hover,
+  .paste-btn:hover,
+  .edit-update-btn:hover:not(:disabled) {
+    background: var(--a500);
+    border-color: var(--a500);
+    color: var(--n900);
+  }
 }
 
 .btn-secondary {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  color: #0284c7;
-  border: 2px solid #7dd3fc;
-  font-weight: 800;
+  background: var(--surface);
 }
 
-.btn-secondary:hover {
-  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
-  border-color: #0284c7;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
+.edit-active {
+  background: var(--err-bg);
+  border-color: var(--err-bd);
+  color: var(--err-fg);
 }
 
-.paste-btn {
-  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-  font-weight: 900;
-  transition: all 0.3s ease;
+.edit-active:hover {
+  background: var(--err-bg);
+  border-color: var(--err-fg);
 }
 
-.paste-btn:hover {
-  background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
-  box-shadow: 0 8px 16px rgba(14, 165, 233, 0.4);
-  transform: translateY(-2px);
+.edit-update-btn {
+  flex: 1;
+  min-width: 200px;
 }
+
+.edit-update-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.edit-update-btn:disabled:active {
+  scale: 1;
+}
+
+/* ---------------------------------------------------------- empty state -- */
+
+.empty-state {
+  flex: 1;
+  display: flex;
+  padding: var(--s16) var(--s6);
+}
+
+.empty-state-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--s3);
+}
+
+.empty-state-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--n400);
+}
+
+.empty-state-title {
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.empty-state-body {
+  max-width: 46ch;
+  font-size: 14px;
+  font-weight: var(--fw-normal);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* --------------------------------------------------------------- results -- */
 
 .result-section {
-  padding: 2.8rem 2.5rem;
-  padding-bottom: 220px;
-  border-top: 3px solid #bae6fd;
-  overflow-y: auto;
-  background: linear-gradient(to bottom, #f0f9ff, #ffffff);
+  /* Was `padding-bottom: 220px` — a magic number reserving space nothing used. */
+  padding: var(--s6);
+}
+
+.summary-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s5);
+  padding: var(--s4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  margin-bottom: var(--s6);
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.summary-label {
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summary-value {
+  font-size: 14px;
+  font-weight: var(--fw-medium);
+  color: var(--text);
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
+  text-wrap: pretty;
+}
+
+/* State is carried by the badge, so the row itself stays neutral. */
+.mcc-present,
+.mcc-missing,
+.ts-valid,
+.ts-expired,
+.ts-invalid,
+.ts-missing {
+  background: none;
+  border: none;
+  padding-left: 0;
 }
 
 .result-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2.2rem;
-  padding-bottom: 1.4rem;
-  border-bottom: 3px solid #7dd3fc;
+  gap: var(--s4);
+  margin-bottom: var(--s4);
 }
 
 .result-header h2 {
-  font-size: 1.5rem;
-  margin: 0;
-  color: #0c4a6e;
-  font-weight: 900;
-  letter-spacing: -0.6px;
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+  text-wrap: balance;
 }
 
 .header-buttons {
   display: flex;
-  gap: 1rem;
+  gap: var(--s2);
 }
 
-.copy-btn {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  color: #0284c7;
-  border: 2px solid #7dd3fc;
-  padding: 0.75rem 1.2rem;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  letter-spacing: 0px;
-  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
-}
+/* ---------------------------------------------------------------- badges -- */
 
-.copy-btn:hover {
-  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
-  color: white;
-  border-color: #0284c7;
-  box-shadow: 0 6px 12px rgba(14, 165, 233, 0.3);
-  transform: translateY(-2px);
-}
-
-.edit-active {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-  color: white !important;
-  border-color: #dc2626 !important;
-}
-
-.edit-panel {
-  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 16px;
-  padding: 2.4rem;
-  margin-bottom: 2.2rem;
-  animation: slideDown 0.4s ease;
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.2);
-}
-
-.edit-panel-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 2px solid rgba(14, 165, 233, 0.3);
-}
-
-.edit-panel-header h3 {
-  font-size: 1.3rem;
-  font-weight: 900;
-  color: #0c4a6e;
-  margin: 0;
-}
-
-.edit-info {
-  font-size: 0.85rem;
-  color: #0284c7;
-  font-weight: 600;
-}
-
-.edit-form-section {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-
-.edit-field {
-  margin-bottom: 1.8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
-}
-
-.edit-field label {
-  font-weight: 900;
-  font-size: 0.9rem;
-  color: #0c4a6e;
-  letter-spacing: 0.2px;
-}
-
-.edit-field-hint {
-  display: block;
-  font-size: 0.75rem;
-  color: #16a34a;
-  font-weight: 600;
-  margin-top: 0.3rem;
-}
-
-.edit-field-error {
-  display: block;
-  font-size: 0.75rem;
-  color: #dc2626;
-  font-weight: 600;
-  margin-top: 0.3rem;
-}
-
-.mcc-selection {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.edit-validation-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1rem;
-  padding: 1.5rem;
-  background: white;
-  border: 2px solid #7dd3fc;
-  border-radius: 12px;
-  margin-bottom: 2rem;
-  animation: slideUpIn 0.4s ease;
-}
-
-.validation-item {
-  display: flex;
+.mcc-badge,
+.ts-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.8rem;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  font-size: 0.85rem;
-  font-weight: 700;
+  gap: var(--s1);
+  padding: 2px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.validation-item.valid {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-  color: #16a34a;
-  border: 1px solid #22c55e;
+.mcc-badge .iconify,
+.ts-badge .iconify,
+.mcc-indicator .iconify,
+.validation-item .iconify {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
-.validation-item.invalid {
-  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+.mcc-badge-present,
+.ts-badge-valid {
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
 }
 
-.validation-icon {
-  font-size: 1rem;
-  font-weight: 900;
+.mcc-badge-missing,
+.ts-badge-expired {
+  background: var(--err-bg);
+  border-color: var(--err-bd);
+  color: var(--err-fg);
 }
 
-.edit-input,
-.edit-select {
-  padding: 1rem;
-  border: 2px solid #7dd3fc;
-  border-radius: 10px;
-  font-size: 15px;
-  font-family: inherit;
-  color: #0c4a6e;
-  background: white;
-  transition: all 0.3s ease;
-  font-weight: 700;
+.ts-badge-invalid {
+  background: var(--warn-bg);
+  border-color: var(--warn-bd);
+  color: var(--warn-fg);
 }
 
-.edit-input:hover,
-.edit-select:hover {
-  border-color: #06b6d4;
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.15);
+.ts-badge-none {
+  background: var(--surface-3);
+  border-color: var(--border);
+  color: var(--text-subtle);
 }
 
-.edit-input:focus,
-.edit-select:focus {
-  outline: none;
-  border-color: #0284c7;
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2);
-}
+/* ----------------------------------------------------------------- alert -- */
 
-.edit-actions {
-  display: flex;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 2px solid rgba(14, 165, 233, 0.2);
-  flex-wrap: wrap;
-}
-
-.edit-update-btn {
-  flex: 1;
-  min-width: 200px;
-  background: linear-gradient(135deg, #0284c7 0%, #06b6d4 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
-  font-weight: 900;
-  font-size: 0.95rem;
-  padding: 1.1rem 2.2rem;
-  transition: all 0.3s ease;
-}
-
-.edit-update-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0369a1 0%, #0891b2 100%);
-  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4);
-  transform: translateY(-3px);
-}
-
-.edit-update-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
-}
-
-.edit-reset-btn {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  border: none;
-  font-weight: 900;
-  padding: 0.85rem 1.5rem;
-}
-
-.edit-reset-btn:hover {
-  background: linear-gradient(135deg, #d97706 0%, #ca8a04 100%);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-  transform: translateY(-2px);
-}
-
-.edit-cancel-btn {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  color: #0284c7;
-  border: 2px solid #7dd3fc;
-  font-weight: 900;
-  padding: 0.85rem 1.5rem;
-}
-
-.edit-cancel-btn:hover {
-  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
-  border-color: #0284c7;
-}
-
-.summary-card {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.3rem;
-  padding: 1.8rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 14px;
-  margin-bottom: 2rem;
-  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
-  animation: slideUpIn 0.5s ease;
-}
-
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-
-.summary-label {
-  font-size: 0.85rem;
-  font-weight: 900;
-  color: #0c4a6e;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-
-.summary-value {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #0284c7;
-  word-break: break-word;
-}
-
-/* MCC Highlight Styles */
 .mcc-warning-alert {
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1.2rem 1.5rem;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 2px solid #f59e0b;
-  border-radius: 12px;
-  margin-bottom: 2rem;
-  animation: slideUpIn 0.4s ease;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-bd);
+  border-radius: var(--r-lg);
+  margin-bottom: var(--s5);
 }
 
 .mcc-warning-icon {
-  font-size: 1.5rem;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--warn-fg);
 }
 
 .mcc-warning-content {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 2px;
   flex: 1;
+  min-width: 0;
 }
 
 .mcc-warning-title {
-  font-weight: 900;
-  color: #92400e;
-  font-size: 0.95rem;
-  letter-spacing: 0.3px;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--warn-fg);
+  text-wrap: balance;
 }
 
 .mcc-warning-desc {
-  font-weight: 600;
-  color: #b45309;
-  font-size: 0.85rem;
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  color: var(--warn-fg);
+  opacity: 0.85;
+  text-wrap: pretty;
 }
 
 .mcc-warning-btn {
-  padding: 0.6rem 1.2rem;
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 900;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+  align-self: flex-start;
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  font-size: 13px;
+  background: var(--surface);
+  border-color: var(--warn-bd);
+  color: var(--warn-fg);
 }
 
 .mcc-warning-btn:hover {
-  background: linear-gradient(135deg, #d97706 0%, #ca8a04 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+  background: var(--warn-bd);
 }
 
-.mcc-present {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-  border-left: 4px solid #22c55e !important;
-  padding-left: 1rem !important;
+/* ------------------------------------------------------------ edit panel -- */
+
+.edit-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--s5);
+  margin-bottom: var(--s5);
+  animation: fadeIn var(--dur-base) var(--ease-out);
 }
 
-.mcc-missing {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
-  border-left: 4px solid #ef4444 !important;
-  padding-left: 1rem !important;
+.edit-panel-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: var(--s5);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--border);
 }
 
-.mcc-badge {
-  display: inline-block;
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 900;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
+.edit-panel-header h3 {
+  font-size: 15px;
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+  text-wrap: balance;
 }
 
-.mcc-badge-present {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
-  border: 2px solid #16a34a;
+.edit-info {
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  color: var(--text-muted);
+  text-wrap: pretty;
 }
 
-.mcc-badge-missing {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-  border: 2px solid #dc2626;
+.edit-form-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--s5);
+  margin-bottom: var(--s5);
 }
 
-/* Timestamp Styles */
-.ts-valid {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-  border-left: 4px solid #22c55e !important;
-  padding-left: 1rem !important;
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  min-width: 0;
 }
 
-.ts-expired {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%) !important;
-  border-left: 4px solid #ef4444 !important;
-  padding-left: 1rem !important;
+.edit-field label {
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
 }
 
-.ts-invalid {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
-  border-left: 4px solid #f59e0b !important;
-  padding-left: 1rem !important;
+.edit-input {
+  padding: var(--s2) var(--s3);
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 14px;
+  font-weight: var(--fw-normal);
+  color: var(--text);
+  background: var(--surface);
+  transition-property: border-color, box-shadow;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
-.ts-missing {
-  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%) !important;
-  border-left: 4px solid #9ca3af !important;
-  padding-left: 1rem !important;
+.edit-input::placeholder {
+  color: var(--text-subtle);
 }
 
-.ts-badge {
-  display: inline-block;
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 900;
-  letter-spacing: 0.3px;
-  white-space: nowrap;
+.edit-field-hint,
+.edit-field-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: 12px;
+  font-weight: var(--fw-normal);
+  font-variant-numeric: tabular-nums;
+  text-wrap: pretty;
 }
 
-.ts-badge-valid {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
-  border: 2px solid #16a34a;
+.edit-field-hint {
+  color: var(--text-subtle);
 }
 
-.ts-badge-expired {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-  border: 2px solid #dc2626;
+.edit-field-error {
+  color: var(--err-fg);
 }
 
-.ts-badge-invalid {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
-  border: 2px solid #d97706;
+.edit-field-error .iconify {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 
-.ts-tree-indicator {
-  margin-left: auto;
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+.mcc-selection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
 }
 
-.ts-valid .ts-tree-indicator {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: white;
+/* Concentric: 12px padding + 4px inner radius = 6px outer (nearest step). */
+.edit-validation-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  margin-bottom: var(--s5);
 }
 
-.ts-expired .ts-tree-indicator {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
+.validation-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  transition-property: background-color, color, border-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
-.ts-invalid .ts-tree-indicator {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  color: white;
+.validation-item.valid {
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
 }
 
-.timestamp-valid {
-  background: #f0fdf4 !important;
-  border-color: #86efac !important;
+.validation-item.invalid {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-subtle);
 }
 
-.timestamp-valid .tree-meaning {
-  color: #16a34a !important;
-  font-weight: 700;
+.edit-actions {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
 }
+
+.edit-reset-btn:hover {
+  background: var(--warn-bg);
+  border-color: var(--warn-bd);
+  color: var(--warn-fg);
+}
+
+/* ------------------------------------------------------------ live toggle -- */
 
 .live-preview-toggle {
   display: flex;
   align-items: center;
-  margin-bottom: 2rem;
-  padding: 1.4rem;
-  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.12);
+  margin-bottom: var(--s4);
 }
 
 .toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: var(--s3);
   cursor: pointer;
 }
 
+/* Visually hidden, not `display: none` — the latter drops it from the tab
+   order and the accessibility tree. */
 .toggle-checkbox {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .toggle-switch {
   position: relative;
-  width: 52px;
-  height: 28px;
-  background: #d0d0d0;
-  border-radius: 14px;
-  transition: background-color 0.3s ease;
-  border: 2px solid #7dd3fc;
+  width: 36px;
+  height: 20px;
+  background: var(--n300);
+  border-radius: 999px;
+  flex-shrink: 0;
+  transition-property: background-color;
+  transition-duration: var(--dur-base);
+  transition-timing-function: var(--ease-out);
 }
 
 .toggle-checkbox:checked+.toggle-switch {
-  background: #06b6d4;
-  border-color: #0284c7;
+  background: var(--accent);
+}
+
+.toggle-checkbox:focus-visible+.toggle-switch {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .toggle-switch::after {
   content: '';
   position: absolute;
-  width: 24px;
-  height: 24px;
-  background: white;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
   border-radius: 50%;
-  top: 1px;
-  left: 1px;
-  transition: left 0.3s ease;
+  top: 2px;
+  left: 2px;
+  /* `translate` composites; animating `left` triggers layout every frame. */
+  transition: translate var(--dur-base) var(--ease-out);
 }
 
 .toggle-checkbox:checked+.toggle-switch::after {
-  left: 25px;
+  translate: 16px 0;
 }
 
 .toggle-text {
-  font-weight: 800;
-  color: #0c4a6e;
-  font-size: 0.95rem;
+  font-size: 14px;
+  font-weight: var(--fw-medium);
+  color: var(--text);
 }
 
+/* ------------------------------------------------------------- TLV tree -- */
+
 .tlv-tree {
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 0.8rem;
-  line-height: 1.8;
-  background: white;
-  color: #000000;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  color: var(--text);
 }
 
 .tree-item {
-  padding: 0.6rem 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--s2);
   align-items: center;
-  border-left: 3px solid transparent;
-  padding-left: 1rem;
-  transition: all 0.3s ease;
-  border-radius: 4px;
-  cursor: pointer;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid transparent;
+  /* Row hover is the highest-frequency interaction here: colour only. */
+  transition-property: background-color, border-left-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+  cursor: default;
+}
+
+.tree-item:last-child {
+  border-bottom: none;
 }
 
 .tree-item:hover {
-  background-color: #f0f9ff;
-  border-left-color: #06b6d4;
-  padding-left: 1.2rem;
-  transform: translateX(2px);
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.1);
+  background: var(--surface-3);
+  border-left-color: var(--accent-border);
+}
+
+/* Tag / length / value: one shared chip shape, distinguished by weight and
+   tone rather than three saturated fills. */
+.tree-tag,
+.tree-length,
+.tree-data {
+  padding: 1px var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  background: var(--surface-2);
+  transition-property: background-color, border-color, color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 .tree-tag {
-  background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%);
-  color: #0c4a6e;
-  padding: 0.35rem 0.6rem;
-  border: 2px solid #06b6d4;
-  font-weight: 800;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  font-size: 0.8rem;
-}
-
-.mcc-tag-highlight {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
-  color: white !important;
-  border: 2px solid #16a34a !important;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4) !important;
-}
-
-.mcc-tag-present {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%) !important;
-}
-
-.mcc-tag-present:hover {
-  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%) !important;
-}
-
-.mcc-indicator {
-  margin-left: auto;
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: white;
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.7rem;
-  font-weight: 900;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
-}
-
-.tree-item:hover .tree-tag {
-  background: linear-gradient(135deg, #7dd3fc 0%, #06b6d4 100%);
-  color: white;
-  transform: scale(1.08);
-  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
+  font-weight: var(--fw-semibold);
+  color: var(--accent);
+  background: var(--accent-weak);
+  border-color: var(--accent-border);
+  min-width: 34px;
+  text-align: center;
 }
 
 .tree-length {
-  background: linear-gradient(135deg, #bfdbfe 0%, #93c5fd 100%);
-  color: #0c4a6e;
-  padding: 0.35rem 0.6rem;
-  border: 2px solid #3b82f6;
-  font-weight: 800;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  font-size: 0.8rem;
+  font-weight: var(--fw-normal);
+  color: var(--text-subtle);
+  min-width: 34px;
+  text-align: center;
 }
 
-.tree-item:hover .tree-length {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-  color: white;
-  transform: scale(1.08);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
+/* Was #ffffff on a #4ade80 fill — about 1.7:1, on the most important text
+   on the page. Dark ink on a pale tint instead. */
 .tree-data {
-  background: linear-gradient(135deg, #86efac 0%, #4ade80 100%);
-  color: #ffffff;
-  padding: 0.35rem 0.6rem;
-  border: 2px solid #22c55e;
-  font-weight: 700;
-  border-radius: 4px;
+  font-weight: var(--fw-medium);
+  color: var(--ok-fg);
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
   word-break: break-all;
-  transition: all 0.2s ease;
-  font-size: 0.8rem;
-}
-
-.tree-item:hover .tree-data {
-  background: linear-gradient(135deg, #4ade80 0%, #16a34a 100%);
-  transform: scale(1.02);
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
 }
 
 .tree-meaning {
-  color: #0284c7;
-  font-size: 0.8rem;
-  font-weight: 700;
-  font-style: italic;
-  margin-left: 0.8rem;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: var(--fw-normal);
+  font-family: inherit;
+  text-wrap: pretty;
 }
 
+.mcc-tag-highlight {
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
+}
+
+.mcc-tag-present {
+  background: var(--ok-bg);
+}
+
+.mcc-indicator,
+.ts-tree-indicator {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: 1px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.mcc-indicator {
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
+}
+
+.ts-valid .ts-tree-indicator,
+.timestamp-valid .ts-tree-indicator {
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
+}
+
+.ts-expired .ts-tree-indicator {
+  background: var(--err-bg);
+  border-color: var(--err-bd);
+  color: var(--err-fg);
+}
+
+.ts-invalid .ts-tree-indicator {
+  background: var(--warn-bg);
+  border-color: var(--warn-bd);
+  color: var(--warn-fg);
+}
+
+.timestamp-valid .tree-meaning {
+  color: var(--ok-fg);
+}
+
+.timestamp-expired {
+  background: var(--err-bg);
+}
+
+.timestamp-expired .tree-meaning {
+  color: var(--err-fg);
+}
+
+.checksum-valid {
+  background: var(--ok-bg);
+  border-left-color: var(--ok-bd);
+}
+
+/* Nested sub-layers: indentation and one hairline, matching the parent. */
 .tree-sublayer {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.8rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 0px;
+  gap: var(--s1);
   width: 100%;
-  margin-left: 0.5rem;
-  animation: slideDown 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  margin-top: var(--s2);
+  margin-left: var(--s3);
+  padding: var(--s2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  animation: fadeIn var(--dur-base) var(--ease-out);
 }
 
 .tree-subitem-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: var(--s2);
   align-items: center;
-  padding: 0.5rem;
-  background: white;
-  border: 1px solid #000000;
-  border-radius: 0px;
   width: 100%;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: fadeInUp 0.3s ease forwards;
+  padding: var(--s1) var(--s2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition-property: background-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 .tree-subitem-line:hover {
-  background: #f9f9f9;
-  transform: translateX(3px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background: var(--surface-3);
 }
 
 .tree-subitem-conversion {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 0.4rem 0.5rem;
-  font-size: 0.7rem;
-  padding-left: 2.5rem;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 0px;
+  padding: var(--s1) var(--s2) var(--s1) var(--s8);
+  font-size: 11.5px;
+  background: none;
+  border: none;
 }
 
 .tree-subitem-conversion .tree-meaning {
-  color: #0066cc;
+  color: var(--text-subtle);
   font-style: normal;
-  font-weight: 600;
-  margin-left: 0;
-}
-
-.timestamp-expired {
-  background: #fef2f2 !important;
-  border-color: #ef4444 !important;
-}
-
-.timestamp-expired .tree-meaning {
-  color: #ef4444 !important;
 }
 
 .crc-link {
   margin-left: auto;
-  color: #0066cc;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: 28px;
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  background: var(--surface);
   text-decoration: none;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.4rem 0.6rem;
-  border: 1px solid #0066cc;
-  border-radius: 2px;
-  transition: all 0.2s ease;
-  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: var(--fw-medium);
+  transition-property: background-color, border-color, scale;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
 .crc-link:hover {
-  background: #0066cc;
-  color: white;
+  background: var(--accent-weak);
+  border-color: var(--accent-border);
 }
 
-.checksum-valid {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-  border-left-color: #22c55e !important;
+.crc-link:active {
+  scale: 0.96;
 }
+
+/* ---------------------------------------------------------- generate tab -- */
 
 .generate-result {
-  padding: 1.25rem 1.5rem;
-  background: white;
-  overflow-y: auto;
+  padding: var(--s6);
+}
+
+.data-label {
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  color: var(--text-subtle);
+  margin-bottom: var(--s2);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .qr-display-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 1.25rem;
-  background: white;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  margin: 1rem 0;
+  padding: var(--s6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  margin-bottom: var(--s4);
 }
 
 .qr-image {
   max-width: 100%;
   height: auto;
-  border-radius: 0px;
-  box-shadow: none;
+  /* Pure black at low alpha, inset so it adds no layout width. A tinted
+     neutral would read as dirt along the QR's quiet zone. */
+  outline: 1px solid oklch(0 0 0 / 0.1);
+  outline-offset: -1px;
 }
 
 .download-options {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background: #f5f5f5;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  margin-bottom: 1rem;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  margin-bottom: var(--s5);
 }
 
 .download-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #000000;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .download-select {
   flex: 1;
-  padding: 0.5rem;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  font-size: 14px;
-  font-family: inherit;
-  color: #000000;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.download-select:hover {
-  border-color: #000000;
-}
-
-.download-select:focus {
-  outline: none;
-  border-color: #000000;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+  min-width: 140px;
 }
 
 .qr-data-display {
-  margin-top: 1rem;
-}
-
-.data-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: #000000;
-  margin: 0 0 0.75rem 0;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  margin-top: var(--s4);
 }
 
 .data-content {
-  background: white;
-  border: 1px solid #000000;
-  border-radius: 0px;
-  padding: 0.75rem;
-  margin: 0;
-  font-size: 0.75rem;
-  overflow-x: auto;
-  word-break: break-all;
-  color: #000000;
-  font-family: 'Monaco', 'Courier New', monospace;
-  line-height: 1.4;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: var(--s3);
+  font-size: 12.5px;
+  font-family: var(--mono);
+  line-height: 1.6;
+  color: var(--text);
   max-height: 200px;
-  transition: background-color 0.2s ease;
+  overflow: auto;
+  word-break: break-all;
+  white-space: pre-wrap;
 }
+
+/* --------------------------------------------------------- reference tab -- */
 
 .reference-tab {
-  padding: 2.5rem 2rem;
-}
-
-.reference-container {
-  max-width: 100%;
+  padding: var(--s6);
 }
 
 .reference-section {
-  margin-bottom: 2.5rem;
-  animation: slideUpIn 0.5s ease;
+  margin-bottom: var(--s8);
+}
+
+.reference-section:last-child {
+  margin-bottom: 0;
 }
 
 .reference-title {
-  font-size: 1.2rem;
-  font-weight: 900;
-  color: #0c4a6e;
-  margin-bottom: 1.5rem;
-  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+  margin-bottom: var(--s3);
+  text-wrap: balance;
 }
 
-.reference-grid {
+.reference-title .iconify {
+  width: 16px;
+  height: 16px;
+  color: var(--text-subtle);
+  flex-shrink: 0;
+}
+
+.reference-grid,
+.currency-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--s2);
+}
+
+.reference-item,
+.currency-item,
+.mcc-item,
+.tag-def {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  transition-property: background-color, border-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+/* Static reference rows: colour only, no movement. */
+.reference-item:hover,
+.currency-item:hover,
+.mcc-item:hover,
+.tag-def:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
 }
 
 .reference-item {
-  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 10px;
-  padding: 1.2rem;
-  transition: all 0.3s ease;
-}
-
-.reference-item:hover {
-  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+  padding: var(--s3);
 }
 
 .bank-name {
-  font-weight: 800;
-  color: #0284c7;
-  font-size: 0.95rem;
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  color: var(--text);
+  text-wrap: pretty;
 }
 
 .tag-definitions {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--s2);
 }
 
+/* Concentric: 12px padding + 3px inner radius ≈ 4px outer at this scale. */
 .tag-def {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border-left: 4px solid #0284c7;
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
   display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  transition: all 0.3s ease;
+  gap: var(--s3);
+  align-items: baseline;
+  padding: var(--s3);
 }
 
-.tag-def:hover {
-  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
-  transform: translateX(4px);
-}
-
-.tag-code {
-  background: linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%);
-  color: #0c4a6e;
-  padding: 0.4rem 0.8rem;
-  border-radius: 6px;
-  font-weight: 900;
-  font-size: 0.9rem;
-  min-width: 50px;
+.tag-code,
+.mcc-code {
+  flex-shrink: 0;
+  min-width: 44px;
+  padding: 1px var(--s2);
+  background: var(--accent-weak);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: var(--fw-semibold);
   text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
-.tag-desc {
+.tag-desc,
+.mcc-desc {
   flex: 1;
-  color: #0c4a6e;
-  font-weight: 600;
-  line-height: 1.5;
-}
-
-.currency-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1rem;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  color: var(--text-muted);
+  text-wrap: pretty;
 }
 
 .currency-item {
-  background: linear-gradient(135deg, #ecf0ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 10px;
-  padding: 1rem;
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  text-align: center;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s3);
 }
 
 .curr-code {
-  font-weight: 900;
-  color: #0284c7;
-  font-size: 1.1rem;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .curr-name {
-  color: #0c4a6e;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  color: var(--text-muted);
+  text-wrap: pretty;
 }
 
+.mcc-search {
+  margin-bottom: var(--s3);
+}
+
+.mcc-search-input {
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  min-height: 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 14px;
+  font-weight: var(--fw-normal);
+  color: var(--text);
+  background: var(--surface);
+  transition-property: border-color, box-shadow;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+.mcc-search-input::placeholder {
+  color: var(--text-subtle);
+}
+
+.mcc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.mcc-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+}
+
+/* --------------------------------------------------------- notification -- */
+
 .notification {
-  position: fixed;
-  top: 30px;
-  right: 30px;
-  padding: 1.2rem 1.8rem;
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 0.95rem;
-  z-index: 9999;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  animation: slideIn 0.3s ease;
+  pointer-events: auto;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  box-shadow:
+    0 0 0 1px oklch(0 0 0 / 0.04),
+    0 4px 12px oklch(0 0 0 / 0.1);
+  animation: slideIn var(--dur-base) var(--ease-out);
   opacity: 1;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--dur-base) var(--ease-out);
 }
 
 .notification-success {
-  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-  color: #166534;
-  border: 2px solid #22c55e;
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
 }
 
 .notification-info {
-  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
-  color: #0c4a6e;
-  border: 2px solid #06b6d4;
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 
 .notification-error {
-  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #991b1b;
-  border: 2px solid #ef4444;
+  border-color: var(--err-bd);
+  color: var(--err-fg);
 }
 
 @keyframes slideIn {
   from {
-    transform: translateX(400px);
+    transform: translateX(16px);
     opacity: 0;
   }
 
@@ -3032,10 +3745,10 @@ export default {
   }
 }
 
-@keyframes slideDown {
+@keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(-15px);
+    transform: translateY(-4px);
   }
 
   to {
@@ -3044,100 +3757,579 @@ export default {
   }
 }
 
-@keyframes slideUpIn {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
+/* --------------------------------------------------------- scan / camera -- */
 
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.field-label {
+  display: block;
+  margin-bottom: var(--s2);
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
 }
 
-/* MCC Styles */
-.mcc-search {
-  margin-bottom: 1.5rem;
-}
-
-.mcc-search-input {
-  width: 100%;
-  padding: 1rem;
-  border: 2px solid #7dd3fc;
-  border-radius: 12px;
-  font-size: 15px;
-  font-family: inherit;
-  color: #0c4a6e;
-  background: white;
-  transition: all 0.3s ease;
-  font-weight: 800;
-}
-
-.mcc-search-input:focus {
-  outline: none;
-  border-color: #0284c7;
-  box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.18);
-}
-
-.mcc-list {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.8rem;
-  max-height: 500px;
-  overflow-y: auto;
-}
-
-.mcc-item {
-  display: grid;
-  grid-template-columns: 100px 1fr;
-  gap: 1rem;
-  padding: 1rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 2px solid #7dd3fc;
-  border-radius: 10px;
+.scan-zone {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  transition: all 0.3s ease;
-}
-
-.mcc-item:hover {
-  background: linear-gradient(135deg, #e0f2fe 0%, #cffafe 100%);
-  transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
-}
-
-.mcc-code {
-  font-weight: 900;
-  color: #0284c7;
+  gap: var(--s2);
+  padding: var(--s6);
+  margin-bottom: var(--s4);
   text-align: center;
-  font-size: 1rem;
-  font-family: 'Monaco', 'Courier New', monospace;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--r-lg);
+  transition-property: background-color, border-color;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
 }
 
-.mcc-desc {
-  color: #0c4a6e;
-  font-weight: 600;
-  font-size: 0.9rem;
+.scan-zone.is-dragging {
+  background: var(--accent-weak);
+  border-color: var(--accent);
 }
 
-/* Mobile Responsive */
-@media (max-width: 1200px) {
-  .tlv-tree {
-    font-size: 0.75rem;
+.scan-zone.is-busy {
+  opacity: 0.7;
+}
+
+.scan-zone-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-subtle);
+}
+
+.scan-zone-text {
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.scan-zone-text strong {
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.scan-zone-actions {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scan-file-btn {
+  position: relative;
+}
+
+.scan-zone-status {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.scan-zone-error {
+  font-size: 12px;
+  color: var(--err-fg);
+  text-wrap: pretty;
+}
+
+.camera-wrap {
+  margin-bottom: var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: #000;
+}
+
+.camera-video {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+}
+
+/* --------------------------------------------------- checksum verdict ----- */
+
+.verdict {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  margin-bottom: var(--s4);
+  border: 1px solid;
+  border-radius: var(--r-lg);
+}
+
+.verdict-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.verdict-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.verdict-title {
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+}
+
+.verdict-desc {
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  text-wrap: pretty;
+}
+
+.verdict-desc code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-valid {
+  background: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
+}
+
+.verdict-invalid {
+  background: var(--err-bg);
+  border-color: var(--err-bd);
+  color: var(--err-fg);
+}
+
+.verdict-missing {
+  background: var(--warn-bg);
+  border-color: var(--warn-bd);
+  color: var(--warn-fg);
+}
+
+.verdict-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  align-self: flex-start;
+  min-height: 32px;
+  padding: var(--s1) var(--s3);
+  border: 1px solid currentColor;
+  border-radius: var(--r-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  opacity: 0.85;
+  transition-property: opacity, scale;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+.verdict-btn:hover {
+  opacity: 1;
+}
+
+.verdict-btn:active {
+  scale: 0.96;
+}
+
+.verdict-btn .iconify {
+  width: 14px;
+  height: 14px;
+}
+
+/* ------------------------------------------------- parser diagnostics ----- */
+
+.issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin-bottom: var(--s4);
+}
+
+.issue {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: var(--fw-normal);
+  text-wrap: pretty;
+}
+
+.issue .iconify {
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+}
+
+.issue-error {
+  background: var(--err-bg);
+  border-color: var(--err-bd);
+  color: var(--err-fg);
+}
+
+.issue-warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-bd);
+  color: var(--warn-fg);
+}
+
+/* ------------------------------------------------ copyable / inline edit -- */
+
+button.tree-data {
+  font-family: var(--mono);
+  cursor: copy;
+  text-align: left;
+}
+
+button.tree-data:hover {
+  border-color: var(--ok-fg);
+}
+
+button.tree-data:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button.tree-data.is-copied {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.inline-edit-btn,
+.inline-ok,
+.inline-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition-property: background-color, border-color, color, scale;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-out);
+}
+
+.inline-edit-btn .iconify,
+.inline-ok .iconify,
+.inline-cancel .iconify {
+  width: 13px;
+  height: 13px;
+}
+
+.inline-edit-btn:hover,
+.inline-cancel:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.inline-ok {
+  border-color: var(--ok-bd);
+  color: var(--ok-fg);
+}
+
+.inline-ok:hover {
+  background: var(--ok-bg);
+}
+
+.inline-edit-btn:active,
+.inline-ok:active,
+.inline-cancel:active {
+  scale: 0.96;
+}
+
+.inline-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 1px var(--s2);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: var(--fw-medium);
+}
+
+.inline-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.generate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s2);
+}
+
+/* -------------------------------------------------------------- toasts ---- */
+
+.toast-host {
+  position: fixed;
+  top: var(--s5);
+  right: var(--s5);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .toast-host {
+    top: var(--s3);
+    right: var(--s3);
+    left: var(--s3);
+  }
+
+  .scan-zone {
+    padding: var(--s4);
   }
 }
+
+/* ============================================================================
+   Motion
+
+   Applied only where it carries information: the arrival of a result, the
+   structure of a decoded payload, and the life cycle of a toast. Hover and
+   typing stay still — those repeat too often to earn an animation.
+   ========================================================================= */
+
+/* -- Tab switch: enter only. There is no leave transition, so the outgoing
+      panel unmounts immediately and the two never overlap in layout. -------- */
+.tab-enter-active {
+  animation: tabIn var(--dur-base) var(--ease-out);
+}
+
+@keyframes tabIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* -- Result arrival ------------------------------------------------------- */
+.verdict {
+  animation: verdictIn 260ms var(--ease-out) backwards;
+}
+
+.summary-card {
+  animation: verdictIn 260ms var(--ease-out) 40ms backwards;
+}
+
+.issues {
+  animation: verdictIn 260ms var(--ease-out) 20ms backwards;
+}
+
+@keyframes verdictIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    filter: blur(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* -- TLV rows: staggered so the payload's structure reads top-down as it
+      lands. The container is keyed on `treeAnimKey`, which only changes on an
+      explicit load (paste, sample, scan, share link) — never while typing. -- */
+.tlv-tree>.tree-item {
+  animation: rowIn 220ms var(--ease-out) backwards;
+}
+
+.tlv-tree>.tree-item:nth-child(1) {
+  animation-delay: 0ms;
+}
+
+.tlv-tree>.tree-item:nth-child(2) {
+  animation-delay: 24ms;
+}
+
+.tlv-tree>.tree-item:nth-child(3) {
+  animation-delay: 48ms;
+}
+
+.tlv-tree>.tree-item:nth-child(4) {
+  animation-delay: 72ms;
+}
+
+.tlv-tree>.tree-item:nth-child(5) {
+  animation-delay: 96ms;
+}
+
+.tlv-tree>.tree-item:nth-child(6) {
+  animation-delay: 120ms;
+}
+
+.tlv-tree>.tree-item:nth-child(7) {
+  animation-delay: 144ms;
+}
+
+.tlv-tree>.tree-item:nth-child(8) {
+  animation-delay: 168ms;
+}
+
+/* Capped: past this the stagger stops adding meaning and starts adding wait. */
+.tlv-tree>.tree-item:nth-child(n+9) {
+  animation-delay: 190ms;
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* -- Toasts: enter with a slide, leave shorter and softer. ---------------- */
+.toast-enter-active {
+  transition-property: opacity, transform;
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.toast-leave-active {
+  transition-property: opacity, transform;
+  transition-duration: 140ms;
+  transition-timing-function: var(--ease-out);
+  position: absolute;
+  right: 0;
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* Remaining toasts slide up to fill the gap left by a dismissed one. */
+.toast-move {
+  transition: transform 220ms var(--ease-out);
+}
+
+/* -- Copy confirmation: a brief tick of scale, not a bounce. -------------- */
+button.tree-data.is-copied {
+  animation: copyPulse 260ms var(--ease-out);
+}
+
+@keyframes copyPulse {
+  from {
+    scale: 0.96;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+/* -- Camera panel reveal -------------------------------------------------- */
+.camera-wrap {
+  animation: cameraIn var(--dur-base) var(--ease-out);
+  transform-origin: top;
+}
+
+@keyframes cameraIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+/* -- Empty state ---------------------------------------------------------- */
+.empty-state-inner {
+  animation: verdictIn 300ms var(--ease-out) backwards;
+}
+
+/* ------------------------------------------------------- reduced motion -- */
+
+/* Every animated state here also carries a static cue (colour, badge, label),
+   so movement can be removed without losing meaning. */
+@media (prefers-reduced-motion: reduce) {
+
+  .container *,
+  .container *::before,
+  .container *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .btn:active,
+  .copy-btn:active,
+  .tab-button:active,
+  .crc-link:active,
+  .edit-update-btn:active:not(:disabled),
+  .edit-reset-btn:active,
+  .edit-cancel-btn:active,
+  .mcc-warning-btn:active {
+    scale: 1;
+  }
+
+  .tlv-tree>.tree-item,
+  .tlv-tree>.tree-item:nth-child(n+9) {
+    animation-delay: 0ms !important;
+  }
+
+  .toast-enter-from,
+  .toast-leave-to {
+    transform: none;
+  }
+}
+
+/* -------------------------------------------------------------- responsive -- */
 
 @media (max-width: 768px) {
   * {
@@ -3145,278 +4337,105 @@ export default {
   }
 
   .header {
-    padding: 1.5rem 1.2rem;
-    border-bottom: 3px solid #0284c7;
+    padding: var(--s5) var(--s4) var(--s4);
   }
 
   .title {
-    font-size: 1.6rem;
-    font-weight: 900;
-    letter-spacing: -0.5px;
-  }
-
-  .subtitle {
-    font-size: 0.8rem;
-    margin-top: 0.4rem;
+    font-size: 18px;
   }
 
   .tab-navigation {
-    padding: 0 0.8rem;
-    gap: 0;
-    top: 5rem;
+    padding-inline: var(--s4);
+  }
+
+  .tab-shell {
+    width: 100%;
   }
 
   .tab-button {
-    padding: 1rem 1rem;
-    font-size: 0.85rem;
-    gap: 0.4rem;
     flex: 1;
     justify-content: center;
+    /* Centred at this size, so the optical offset is reset to symmetric. */
+    padding: var(--s3) var(--s2);
+    min-height: 44px;
   }
 
-  .input-area {
-    padding: 1.5rem 1.2rem;
+  .input-area,
+  .result-section,
+  .reference-tab,
+  .generate-result {
+    padding: var(--s4);
+  }
+
+  .empty-state {
+    padding: var(--s12) var(--s4);
   }
 
   .sample-selector {
     flex-direction: column;
-    padding: 1.2rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .sample-label {
-    font-size: 0.9rem;
-    width: 100%;
-  }
-
-  .sample-select {
-    width: 100%;
-    padding: 0.9rem;
-    font-size: 15px;
-  }
-
-  .input-field {
-    height: 120px;
-    padding: 1rem;
-    font-size: 16px;
-    margin-bottom: 1rem;
-    border-radius: 10px;
-  }
-
-  .action-buttons {
-    display: flex;
-    flex-direction: row;
-    gap: 1rem;
-    margin-top: 1.5rem;
+    align-items: stretch;
+    gap: var(--s2);
   }
 
   .summary-card {
     grid-template-columns: 1fr;
-    gap: 1rem;
-    padding: 1.2rem;
-    margin-bottom: 1.5rem;
+    gap: var(--s3);
   }
 
   .summary-item {
     flex-direction: row;
     justify-content: space-between;
-    align-items: center;
-    padding: 0.8rem 0;
-    border-bottom: 1px solid rgba(14, 165, 233, 0.1);
-  }
-
-  .summary-item:last-child {
-    border-bottom: none;
-  }
-
-  .summary-label {
-    font-size: 0.8rem;
-  }
-
-  .summary-value {
-    font-size: 0.95rem;
-  }
-
-  .live-preview-toggle {
-    padding: 1.2rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .result-section {
-    padding: 1.5rem 1.2rem;
-    padding-bottom: 200px;
+    align-items: baseline;
+    gap: var(--s4);
   }
 
   .result-header {
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
     flex-direction: column;
-    gap: 1rem;
+    align-items: stretch;
+    gap: var(--s3);
   }
 
-  .result-header h2 {
-    font-size: 1.3rem;
-    width: 100%;
-  }
-
-  .header-buttons {
-    width: 100%;
-    display: flex;
-    gap: 0.8rem;
-  }
-
-  .copy-btn {
-    padding: 0.8rem 1rem;
-    font-size: 0.8rem;
-    border-radius: 8px;
+  .header-buttons .copy-btn {
     flex: 1;
   }
 
-  .edit-panel {
-    padding: 1.5rem 1.2rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .edit-field {
-    margin-bottom: 1.5rem;
-  }
-
-  .edit-field label {
-    font-size: 0.9rem;
-  }
-
+  /* Touch targets get the full 44px. */
+  .btn,
+  .copy-btn,
   .edit-input,
-  .edit-select {
-    padding: 0.9rem;
+  .edit-select,
+  .sample-select,
+  .mcc-search-input,
+  .edit-update-btn,
+  .edit-cancel-btn,
+  .edit-reset-btn {
+    min-height: 44px;
+  }
+
+  /* 16px prevents iOS Safari from zooming on focus. */
+  .input-field,
+  .edit-input,
+  .edit-select,
+  .sample-select,
+  .mcc-search-input {
     font-size: 16px;
-    border-radius: 8px;
   }
 
   .edit-actions {
-    display: flex;
     flex-direction: column;
-    gap: 1rem;
-    margin-top: 1.5rem;
-    padding-top: 1.2rem;
   }
 
   .edit-update-btn,
-  .edit-cancel-btn {
+  .edit-cancel-btn,
+  .edit-reset-btn {
     width: 100%;
-    padding: 1rem 1.2rem;
-  }
-
-  .tree-item {
-    padding: 0.7rem 0;
-    gap: 0.4rem;
-  }
-
-  .tree-tag,
-  .tree-length,
-  .tree-data {
-    font-size: 0.75rem;
-    padding: 0.3rem 0.5rem;
-  }
-
-  .tree-meaning {
-    font-size: 0.7rem;
-    margin-left: 0.4rem;
-  }
-
-  .mcc-list {
-    max-height: 400px;
-  }
-
-  .mcc-item {
-    grid-template-columns: 80px 1fr;
-    gap: 0.8rem;
-    padding: 0.8rem;
-  }
-
-  .mcc-code {
-    font-size: 0.9rem;
-  }
-
-  .mcc-desc {
-    font-size: 0.85rem;
-  }
-
-  .reference-tab {
-    padding: 1.5rem 1.2rem;
+    min-width: 0;
   }
 
   .reference-grid,
   .currency-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 0.8rem;
+    grid-template-columns: 1fr;
   }
 
-  .notification {
-    right: 15px;
-    top: 20px;
-    padding: 1rem 1.2rem;
-    font-size: 0.85rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .header {
-    padding: 1.2rem 1rem;
-  }
-
-  .title {
-    font-size: 1.4rem;
-  }
-
-  .subtitle {
-    font-size: 0.75rem;
-  }
-
-  .tab-button {
-    padding: 0.85rem 0.5rem;
-    font-size: 0.75rem;
-  }
-
-  .input-area {
-    padding: 1.2rem 1rem;
-  }
-
-  .sample-selector {
-    padding: 1rem;
-  }
-
-  .input-field {
-    height: 100px;
-    padding: 0.9rem;
-  }
-
-  .btn {
-    padding: 0.85rem 1rem;
-    font-size: 0.85rem;
-  }
-
-  .summary-card {
-    padding: 1rem;
-    gap: 0.8rem;
-  }
-
-  .result-section {
-    padding: 1.2rem 1rem;
-  }
-
-  .result-header h2 {
-    font-size: 1.2rem;
-  }
-
-  .edit-panel {
-    padding: 1.2rem 1rem;
-  }
-
-  .notification {
-    right: 10px;
-    top: 15px;
-    padding: 0.9rem 1rem;
-    font-size: 0.8rem;
-  }
 }
 </style>

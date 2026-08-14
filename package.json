@@ -9,6 +9,7 @@
     "generate": "nuxt generate"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "^1.2.123",
     "nuxt": "^3.17.0"
   },
   "dependencies": {
