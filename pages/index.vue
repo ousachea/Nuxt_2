@@ -53,6 +53,7 @@ export default {
         { name: 'Project', route: '/project', icon: '📊' },
         { name: 'KHQR', route: '/qr', icon: '🔲' },
         { name: 'Sort', route: '/sort', icon: '💬' },
+        { name: 'AI Cooldown', route: '/Cooldown', icon: '💬'},
         { name: 'Text Converter', route: '/text-converter', icon: '📝' },
       ],
     };
